@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+namespace GameFeedback\Support;
+
 final class Request
 {
     public static function method(): string
@@ -16,7 +18,38 @@ final class Request
 
     public static function authorizationHeader(): string
     {
-        return (string)($_SERVER['HTTP_AUTHORIZATION'] ?? '');
+        $fromServer = (string)($_SERVER['HTTP_AUTHORIZATION'] ?? '');
+        if ($fromServer !== '') {
+            return $fromServer;
+        }
+
+        $fromRedirect = (string)($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        if ($fromRedirect !== '') {
+            return $fromRedirect;
+        }
+
+        if (function_exists('getallheaders')) {
+            $headers = getallheaders();
+            if (is_array($headers)) {
+                foreach ($headers as $key => $value) {
+                    if (strtolower((string)$key) === 'authorization' && is_string($value)) {
+                        return $value;
+                    }
+                }
+            }
+        }
+
+        return '';
+    }
+
+    public static function clientIp(): string
+    {
+        $ip = trim((string)($_SERVER['REMOTE_ADDR'] ?? ''));
+        if ($ip === '') {
+            return 'unknown';
+        }
+
+        return preg_match('/^[A-Fa-f0-9:\.]{1,45}$/', $ip) === 1 ? $ip : 'unknown';
     }
 
     public static function isMultipartFormData(): bool
@@ -25,6 +58,9 @@ final class Request
         return strpos($contentType, 'multipart/form-data') === 0;
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public static function formBody(): array
     {
         if (!is_array($_POST)) {
@@ -34,6 +70,9 @@ final class Request
         return $_POST;
     }
 
+    /**
+     * @return array{name:string,type:string,tmp_name:string,error:int,size:int}|null
+     */
     public static function uploadedFile(string $key): ?array
     {
         if (!isset($_FILES[$key]) || !is_array($_FILES[$key])) {
@@ -43,6 +82,9 @@ final class Request
         return $_FILES[$key];
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public static function jsonBody(): array
     {
         $raw = file_get_contents('php://input');

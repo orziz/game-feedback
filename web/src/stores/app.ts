@@ -2,15 +2,19 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { ElMessage } from 'element-plus'
 import { i18n } from '../i18n'
-import { checkInstallStatus, fetchEnumOptions, installSystem as installSystemRequest } from '../services/feedbackService'
+import { api } from '../api/client'
 import { getErrorMessage } from '../utils/errors'
 
+/**
+ * 应用全局 Pinia Store
+ *
+ * 管理安装状态、当前 Tab、枚举选项、上传模式等全局状态
+ */
 export const useAppStore = defineStore('app', () => {
   const isInstalled = ref(false)
   const checkingInstall = ref(false)
   const installLoading = ref(false)
   const activeTab = ref<AppTab>('submit')
-  const pendingTicketNo = ref('')
   const initialized = ref(false)
   const uploadMode = ref<UploadMode>('off')
   const typeOptions = ref<EnumOption<FeedbackType>[]>([])
@@ -38,7 +42,7 @@ export const useAppStore = defineStore('app', () => {
   async function refreshEnumOptions(locale: LocaleCode = i18n.global.locale.value as LocaleCode): Promise<void> {
     const { t } = i18n.global
     try {
-      const data = await fetchEnumOptions(locale)
+      const data = await api.system.Setup.get.enumOptions({ lang: locale })
       typeOptions.value = data.types
       severityOptions.value = data.severities
       statusOptions.value = data.statuses
@@ -51,7 +55,7 @@ export const useAppStore = defineStore('app', () => {
     const { t } = i18n.global
     checkingInstall.value = true
     try {
-      const data = await checkInstallStatus()
+      const data = await api.system.Status.get.installStatus()
       isInstalled.value = Boolean(data.installed)
       uploadMode.value = data.uploadMode || 'off'
     } catch (error) {
@@ -67,7 +71,20 @@ export const useAppStore = defineStore('app', () => {
     const { t } = i18n.global
     installLoading.value = true
     try {
-      await installSystemRequest(payload)
+      await api.system.Setup.post.install({
+        host: payload.host.trim(),
+        port: Number(payload.port),
+        database: payload.database.trim(),
+        username: payload.username.trim(),
+        password: payload.password,
+        adminUsername: payload.adminUsername.trim(),
+        adminPassword: payload.adminPassword,
+        uploadMode: payload.uploadMode,
+        qiniuAccessKey: payload.qiniuAccessKey.trim(),
+        qiniuSecretKey: payload.qiniuSecretKey.trim(),
+        qiniuBucket: payload.qiniuBucket.trim(),
+        qiniuDomain: payload.qiniuDomain.trim(),
+      })
       isInstalled.value = true
       uploadMode.value = payload.uploadMode
       activeTab.value = 'submit'
@@ -82,15 +99,6 @@ export const useAppStore = defineStore('app', () => {
 
   function setActiveTab(tab: AppTab): void {
     activeTab.value = tab
-  }
-
-  function openQueryWithTicket(ticketNo: string): void {
-    pendingTicketNo.value = ticketNo
-    activeTab.value = 'query'
-  }
-
-  function clearPendingTicket(): void {
-    pendingTicketNo.value = ''
   }
 
   function getTypeLabel(value: FeedbackType): string {
@@ -110,7 +118,6 @@ export const useAppStore = defineStore('app', () => {
     checkingInstall,
     installLoading,
     activeTab,
-    pendingTicketNo,
     uploadMode,
     typeOptions,
     severityOptions,
@@ -123,8 +130,6 @@ export const useAppStore = defineStore('app', () => {
     refreshEnumOptions,
     installSystem,
     setActiveTab,
-    openQueryWithTicket,
-    clearPendingTicket,
     getTypeLabel,
     getSeverityLabel,
     getStatusLabel,

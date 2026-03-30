@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { submitFeedback } from '../services/feedbackService'
+import { api } from '../api/client'
 import { getErrorMessage, getApiError } from '../utils/errors'
 import { useAppStore } from '../stores/app'
 
@@ -22,6 +22,7 @@ const detailLabel = computed(() => (form.value.type === bugType ? t('submitForm.
 const detailPlaceholder = computed(() => (
   form.value.type === bugType ? t('submitForm.stepsPlaceholder') : t('submitForm.descriptionPlaceholder')
 ))
+const detailRows = computed(() => 7)
 
 const form = ref<SubmitForm>({
   type:           defaultType,
@@ -74,6 +75,10 @@ function clearAttachment(): void {
   }
 }
 
+function openAttachmentPicker(): void {
+  attachmentInputRef.value?.click()
+}
+
 async function handleSubmit(): Promise<void> {
   if (submitting.value) {
     return
@@ -94,7 +99,17 @@ async function handleSubmit(): Promise<void> {
 
   submitting.value = true
   try {
-    const data = await submitFeedback(form.value)
+    const formData = new FormData()
+    formData.append('type', String(form.value.type))
+    formData.append('severity', String(form.value.severity))
+    formData.append('title', form.value.title.trim())
+    formData.append('description', form.value.description.trim())
+    formData.append('contact', form.value.contact.trim())
+    if (form.value.attachmentFile) {
+      formData.append('attachment', form.value.attachmentFile)
+    }
+
+    const data = await api.feedback.Ticket.postForm.submit(formData)
     await ElMessageBox.alert(
       t('messages.submitSuccessBody', { ticketNo: data.ticketNo }),
       t('messages.submitSuccessTitle'),
@@ -126,68 +141,206 @@ async function handleSubmit(): Promise<void> {
 </script>
 
 <template>
-  <el-form label-width="124px" class="block-form">
-    <el-form-item :label="t('submitForm.type')" required>
-      <el-radio-group v-model="form.type">
-        <el-radio-button v-for="ft in typeOptions" :key="ft.value" :value="ft.value">
-          {{ ft.label }}
-        </el-radio-button>
-      </el-radio-group>
-    </el-form-item>
+  <el-form label-position="top" class="submit-form">
+    <section class="submit-form__compact-fields">
+      <div class="submit-form__row">
+        <div class="submit-form__row-label is-required">{{ t('submitForm.type') }}</div>
+        <div class="submit-form__row-control">
+          <el-radio-group v-model="form.type" class="submit-form__radio-group">
+            <el-radio-button v-for="ft in typeOptions" :key="ft.value" :value="ft.value">
+              {{ ft.label }}
+            </el-radio-button>
+          </el-radio-group>
+        </div>
+      </div>
 
-    <el-form-item :label="t('submitForm.severity')" required>
-      <el-select v-model="form.severity" :placeholder="t('submitForm.severity')">
-        <el-option v-for="s in severityOptions" :key="s.value" :label="s.label" :value="s.value" />
-      </el-select>
-    </el-form-item>
+      <div class="submit-form__row">
+        <div class="submit-form__row-label is-required">{{ t('submitForm.severity') }}</div>
+        <div class="submit-form__row-control">
+          <el-select v-model="form.severity" :placeholder="t('submitForm.severity')" class="submit-form__control">
+            <el-option v-for="s in severityOptions" :key="s.value" :label="s.label" :value="s.value" />
+          </el-select>
+        </div>
+      </div>
 
-    <el-form-item :label="t('submitForm.title')" required>
-      <el-input v-model="form.title" maxlength="120" show-word-limit :placeholder="t('submitForm.titlePlaceholder')" />
-    </el-form-item>
+      <div class="submit-form__row">
+        <div class="submit-form__row-label is-required">{{ t('submitForm.title') }}</div>
+        <div class="submit-form__row-control">
+          <el-input
+            v-model="form.title"
+            maxlength="120"
+            show-word-limit
+            :placeholder="t('submitForm.titlePlaceholder')"
+            class="submit-form__control"
+          />
+        </div>
+      </div>
 
-    <el-form-item :label="detailLabel" required>
-      <el-input
-        v-model="form.description"
-        type="textarea"
-        :rows="8"
-        maxlength="3000"
-        show-word-limit
-        :placeholder="detailPlaceholder"
-      />
-    </el-form-item>
+    </section>
 
-    <el-form-item :label="t('submitForm.contact')">
-      <el-input v-model="form.contact" maxlength="120" :placeholder="t('submitForm.contactPlaceholder')" />
-    </el-form-item>
+    <div class="submit-form__row submit-form__row--top">
+      <div class="submit-form__row-label is-required">{{ detailLabel }}</div>
+      <div class="submit-form__row-control">
+        <el-input
+          v-model="form.description"
+          type="textarea"
+          :rows="detailRows"
+          maxlength="3000"
+          show-word-limit
+          :placeholder="detailPlaceholder"
+          class="submit-form__control"
+        />
+      </div>
+    </div>
 
-    <el-form-item :label="t('submitForm.attachment')">
+    <div class="submit-form__row">
+      <div class="submit-form__row-label">{{ t('submitForm.contact') }}</div>
+      <div class="submit-form__row-control">
+        <el-input
+          v-model="form.contact"
+          maxlength="120"
+          :placeholder="t('submitForm.contactPlaceholder')"
+          class="submit-form__control"
+        />
+      </div>
+    </div>
+
+    <div class="submit-form__attachment-block">
       <div class="submit-attachment">
         <input
           ref="attachmentInputRef"
           type="file"
           accept=".zip,.png,.jpg,.jpeg,image/png,image/jpeg,application/zip"
           :disabled="!canUploadAttachment || submitting"
+          class="submit-attachment__native"
           @change="handleAttachmentChange"
         >
-        <el-button v-if="form.attachmentFile" text @click="clearAttachment">
-          {{ t('submitForm.clearAttachment') }}
-        </el-button>
+        <div class="submit-attachment__row">
+          <el-button plain :disabled="!canUploadAttachment || submitting" @click="openAttachmentPicker">
+            {{ t('submitForm.attachment') }}
+          </el-button>
+          <div class="submit-attachment__name" :class="{ 'is-empty': !form.attachmentFile }">
+            {{ form.attachmentFile?.name || t('submitForm.attachmentTip') }}
+          </div>
+          <el-button v-if="form.attachmentFile" text @click="clearAttachment">
+            {{ t('submitForm.clearAttachment') }}
+          </el-button>
+        </div>
         <p class="submit-attachment__tip">{{ t('submitForm.attachmentTip') }}</p>
         <p v-if="!canUploadAttachment" class="submit-attachment__disabled">{{ t('submitForm.attachmentDisabled') }}</p>
       </div>
-    </el-form-item>
+    </div>
 
-    <el-button type="primary" :loading="submitting" :disabled="submitting" @click="handleSubmit">
-      {{ t('submitForm.submitButton') }}
-    </el-button>
+    <div class="submit-form__actions">
+      <el-button type="primary" :loading="submitting" :disabled="submitting" class="submit-form__submit" @click="handleSubmit">
+        {{ t('submitForm.submitButton') }}
+      </el-button>
+    </div>
   </el-form>
 </template>
 
 <style scoped>
+.submit-form {
+  width: 100%;
+  max-width: none;
+  padding-bottom: 88px;
+}
+
+.submit-form__control {
+  width: 100%;
+}
+
+.submit-form__compact-fields {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.submit-form__row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+}
+
+.submit-form__row--top {
+  align-items: start;
+  margin-bottom: 18px;
+}
+
+.submit-form__attachment-block {
+  width: 100%;
+  margin: 18px 0 0;
+}
+
+.submit-form__row-label {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.submit-form__row-label.is-required::before {
+  content: '*';
+  margin-right: 4px;
+  color: var(--danger);
+}
+
+.submit-form__row-control {
+  min-width: 0;
+}
+
+.submit-form__radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.submit-form__radio-group :deep(.el-radio-button) {
+  margin-right: 0;
+}
+
+.submit-form__radio-group :deep(.el-radio-button__inner) {
+  border-radius: 12px;
+  padding-inline: 14px;
+}
+
 .submit-attachment {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  width: 100%;
+}
+
+.submit-attachment__native {
+  display: none;
+}
+
+.submit-attachment__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(248, 251, 253, 0.95), rgba(255, 255, 255, 0.98));
+}
+
+.submit-attachment__name {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(15, 118, 110, 0.06);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.submit-attachment__name.is-empty {
+  color: var(--ink-soft);
 }
 
 .submit-attachment__tip,
@@ -195,5 +348,51 @@ async function handleSubmit(): Promise<void> {
   margin: 0;
   font-size: 12px;
   color: var(--ink-soft);
+}
+
+.submit-form__actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+  padding-top: 12px;
+  background: linear-gradient(180deg, rgba(247, 252, 251, 0), rgba(247, 252, 251, 0.96) 45%, rgba(247, 252, 251, 1));
+}
+
+.submit-form__submit {
+  min-width: 180px;
+  padding-inline: 28px;
+}
+
+@media (max-width: 768px) {
+  .submit-form {
+    padding-bottom: 76px;
+  }
+
+  .submit-form__compact-fields {
+    gap: 10px;
+  }
+
+  .submit-form__row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .submit-attachment__row {
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
+
+  .submit-attachment__name {
+    width: 100%;
+  }
+
+  .submit-form__submit {
+    width: 100%;
+    min-width: 0;
+  }
 }
 </style>

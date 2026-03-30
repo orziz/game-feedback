@@ -7,15 +7,17 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  login: [password: string]
+  login: [username: string, password: string]
 }>()
 
 const { t } = useI18n()
+const username = ref('')
 const password = ref('')
 
 async function handleLogin(): Promise<void> {
-  const current = password.value
-  await Promise.resolve(emit('login', current))
+  const u = username.value
+  const p = password.value
+  await Promise.resolve(emit('login', u, p))
   password.value = ''
 }
 </script>
@@ -29,6 +31,11 @@ async function handleLogin(): Promise<void> {
     </div>
 
     <div class="admin-login-panel__form">
+      <el-input
+        v-model="username"
+        :placeholder="t('admin.usernamePlaceholder')"
+        @keyup.enter="handleLogin"
+      />
       <el-input
         v-model="password"
         type="password"
@@ -80,10 +87,9 @@ async function handleLogin(): Promise<void> {
 }
 
 .admin-login-panel__form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  align-items: center;
 }
 
 @media (max-width: 768px) {

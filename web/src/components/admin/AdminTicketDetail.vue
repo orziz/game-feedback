@@ -2,10 +2,10 @@
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
+import { api } from '../../api/client'
 import { getStatusTagType } from '../../i18n'
 import { useAppStore } from '../../stores/app'
-import { useAdminStore } from '../../stores/admin'
-import { downloadAdminAttachment } from '../../services/feedbackService'
+import { triggerBlobDownload } from '../../utils/download'
 import { getErrorMessage } from '../../utils/errors'
 
 defineProps<{
@@ -17,9 +17,7 @@ defineProps<{
 const emit = defineEmits<{ save: [] }>()
 const { t } = useI18n()
 const appStore = useAppStore()
-const adminStore = useAdminStore()
 const { severityOptions, statusOptions } = storeToRefs(appStore)
-const { token } = storeToRefs(adminStore)
 const bugType: FeedbackType = 0
 
 async function handleDownloadAttachment(ticket: TicketRecord): Promise<void> {
@@ -30,7 +28,8 @@ async function handleDownloadAttachment(ticket: TicketRecord): Promise<void> {
   }
 
   try {
-    await downloadAdminAttachment(token.value, ticket.ticket_no, attachmentName)
+    const blob = await api.admin.Ticket.getBlob.attachmentDownload({ ticketNo: ticket.ticket_no })
+    triggerBlobDownload(blob, attachmentName || `attachment-${ticket.ticket_no}`)
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('messages.attachmentDownloadFailed')))
   }
@@ -104,7 +103,7 @@ async function handleDownloadAttachment(ticket: TicketRecord): Promise<void> {
           </span>
         </el-form-item>
 
-        <el-form-item :label="t('query.adminNote')">
+        <el-form-item :label="t('admin.detailNote')">
           <el-input
             v-model="updateForm.adminNote"
             type="textarea"

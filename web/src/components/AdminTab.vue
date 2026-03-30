@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
 import { useAdminStore } from '../stores/admin'
-import AdminLoginPanel from './admin/AdminLoginPanel.vue'
 import AdminFiltersBar from './admin/AdminFiltersBar.vue'
 import AdminTicketTable from './admin/AdminTicketTable.vue'
 import AdminTicketDetail from './admin/AdminTicketDetail.vue'
+import AdminUserManagement from './admin/AdminUserManagement.vue'
 
+const { t } = useI18n()
 const adminStore = useAdminStore()
 const {
-  isAuthenticated,
   loading,
   statusFilter,
   typeFilter,
@@ -21,9 +22,12 @@ const {
   selectedTicket,
   updateForm,
   updating,
+  isSuperAdmin,
+  currentUser,
 } = storeToRefs(adminStore)
 
 const detailVisible = ref(false)
+const adminTab = ref('tickets')
 
 async function handleSelectTicket(ticketNo: string): Promise<void> {
   detailVisible.value = true
@@ -32,55 +36,146 @@ async function handleSelectTicket(ticketNo: string): Promise<void> {
 </script>
 
 <template>
-  <AdminLoginPanel
-    v-if="!isAuthenticated"
-    :loading="loading"
-    @login="adminStore.login"
-  />
+  <div class="admin-workspace">
+    <div class="admin-workspace__header">
+      <span class="admin-workspace__user">
+        {{ currentUser?.username }}
+        <el-tag v-if="isSuperAdmin" size="small" type="warning">{{ t('admin.superAdmin') }}</el-tag>
+      </span>
+      <el-button size="small" @click="adminStore.logout()">{{ t('common.logout') }}</el-button>
+    </div>
 
-  <div v-else class="admin-workspace">
-    <AdminFiltersBar
-      v-model:status-filter="statusFilter"
-      v-model:type-filter="typeFilter"
-      v-model:keyword="keyword"
-      :loading="loading"
-      @refresh="adminStore.refresh()"
-      @logout="adminStore.logout()"
-    />
+    <el-tabs v-model="adminTab" type="card" class="admin-tabs">
+      <el-tab-pane :label="t('admin.queueTitle')" name="tickets">
+        <section class="admin-pane admin-pane--split">
+          <div class="admin-pane__top">
+            <AdminFiltersBar
+              v-model:status-filter="statusFilter"
+              v-model:type-filter="typeFilter"
+              v-model:keyword="keyword"
+              :loading="loading"
+              compact
+              @refresh="adminStore.refresh()"
+            />
+          </div>
 
-    <AdminTicketTable
-      :tickets="tickets"
-      :loading="loading"
-      :page="page"
-      :page-size="pageSize"
-      :total="total"
-      @select="handleSelectTicket"
-      @page-change="adminStore.changePage"
-      @page-size-change="adminStore.changePageSize"
-    />
+          <div class="admin-pane__bottom">
+            <AdminTicketTable
+              :tickets="tickets"
+              :loading="loading"
+              :page="page"
+              :page-size="pageSize"
+              :total="total"
+              @select="handleSelectTicket"
+              @page-change="adminStore.changePage"
+              @page-size-change="adminStore.changePageSize"
+            />
+          </div>
+        </section>
 
-    <el-drawer
-      v-model="detailVisible"
-      size="46%"
-      :with-header="false"
-      destroy-on-close
-      class="admin-detail-drawer"
-    >
-      <AdminTicketDetail
-        :ticket="selectedTicket"
-        :update-form="updateForm"
-        :updating="updating"
-        @save="adminStore.saveTicket()"
-      />
-    </el-drawer>
+        <el-drawer
+          v-model="detailVisible"
+          size="46%"
+          :with-header="false"
+          destroy-on-close
+          class="admin-detail-drawer"
+        >
+          <AdminTicketDetail
+            :ticket="selectedTicket"
+            :update-form="updateForm"
+            :updating="updating"
+            @save="adminStore.saveTicket()"
+          />
+        </el-drawer>
+      </el-tab-pane>
+
+      <el-tab-pane v-if="isSuperAdmin" :label="t('admin.userManagement')" name="users">
+        <section class="admin-pane admin-pane--scroll">
+          <AdminUserManagement />
+        </section>
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
 <style scoped>
 .admin-workspace {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.admin-workspace__header {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+  min-height: 28px;
+}
+
+.admin-workspace__user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.admin-tabs {
+  display: flex;
+  flex: 1;
+  min-height: 0;
   flex-direction: column;
-  gap: 20px;
+  overflow: hidden;
+}
+
+.admin-tabs :deep(.el-tabs__header) {
+  margin: 0;
+}
+
+.admin-tabs :deep(.el-tabs__content) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding-top: 10px;
+}
+
+.admin-tabs :deep(.el-tab-pane) {
+  height: 100%;
+  min-height: 0;
+}
+
+.admin-tabs :deep(.el-tabs__item) {
+  height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.admin-pane {
+  height: 100%;
+  min-height: 0;
+}
+
+.admin-pane--split {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.admin-pane__top,
+.admin-pane__bottom {
+  min-height: 0;
+}
+
+.admin-pane__bottom {
+  overflow: hidden;
+}
+
+.admin-pane--scroll {
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .admin-detail-drawer :deep(.el-drawer__body) {
@@ -92,5 +187,12 @@ async function handleSelectTicket(ticketNo: string): Promise<void> {
 
 .admin-detail-drawer :deep(.admin-detail-card) {
   margin-bottom: 12px;
+}
+
+@media (max-width: 768px) {
+  .admin-workspace__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 </style>

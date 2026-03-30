@@ -4,6 +4,10 @@
 
 当前后端已调整为兼容 `PHP 7.2+`，数据库可使用 `MySQL 5.6+`。
 
+![image1](./images/1.png)
+![image2](./images/2.png)
+![image3](./images/3.png)
+
 ## 项目简介
 
 这个项目适合用来搭建一个轻量的游戏反馈入口，覆盖以下核心场景：
@@ -21,10 +25,11 @@ feedbackForm/
 ├── web/                 # 前端（Vue 3 + Vite + Element Plus）
 ├── server/              # 后端（PHP + MySQL）
 │   ├── public/          # HTTP 入口（仅启动与路由）
-│   ├── src/             # 业务代码（分层架构）
+│   ├── src/             # 业务代码
+│   │   ├── API/         # mod 分流后的接口模块
 │   │   ├── Support/     # 请求、响应、数据库、Token 等基础能力
 │   │   ├── Repository/  # 数据访问层
-│   │   └── App.php      # 应用编排与路由分发
+│   │   └── App.php      # 单入口路由分发
 │   └── config/          # 配置文件
 ├── 需求文档.md
 └── README.md
@@ -101,7 +106,7 @@ http://127.0.0.1:8000/index.php
 你也可以先访问健康检查接口确认服务正常：
 
 ```text
-http://127.0.0.1:8000/index.php?action=health
+http://127.0.0.1:8000/index.php?s=system/Status/health
 ```
 
 ### 4. 启动前端服务
@@ -300,15 +305,25 @@ npm run build
 
 后端当前已经实现以下接口：
 
-- `action=health`：健康检查
-- `action=install_status`：安装状态检查
-- `action=install`：首次安装
-- `action=submit`：提交反馈
-- `action=ticket`：按工单号查询
-- `action=admin_login`：管理员登录
-- `action=admin_list`：管理员查看工单列表
-- `action=admin_detail`：管理员查看工单详情
-- `action=admin_update`：管理员更新工单状态
+- `s=system/Status/health`：健康检查
+- `s=system/Status/installStatus`：安装状态检查
+- `s=system/Setup/enumOptions`：枚举选项
+- `s=system/Setup/install`：首次安装
+- `s=feedback/Ticket/submit`：提交反馈
+- `s=feedback/Ticket/detail`：按工单号查询
+- `s=feedback/Ticket/search`：公开方案搜索
+- `s=admin/Auth/login`：管理员登录
+- `s=admin/Auth/currentUser`：当前管理员信息
+- `s=admin/Ticket/list`：管理员查看工单列表
+- `s=admin/Ticket/detail`：管理员查看工单详情
+- `s=admin/Ticket/attachmentDownload`：管理员下载附件
+- `s=admin/Ticket/update`：管理员更新工单状态
+- `s=admin/User/list`：管理员用户列表
+- `s=admin/User/create`：创建管理员用户
+- `s=admin/User/delete`：删除管理员用户
+- `s=admin/User/resetPassword`：重置管理员密码
+
+旧版 `action=xxx` 形式已移除。
 
 ## License
 

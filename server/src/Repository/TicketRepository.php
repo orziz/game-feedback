@@ -2,21 +2,36 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../Support/Responder.php';
-require_once __DIR__ . '/../Enums/TicketType.php';
-require_once __DIR__ . '/../Enums/TicketSeverity.php';
-require_once __DIR__ . '/../Enums/TicketStatus.php';
+namespace GameFeedback\Repository;
 
+use GameFeedback\Support\Responder;
+use PDO;
+use Throwable;
+
+
+/**
+ * 工单数据库仓储类
+ *
+ * 封装 feedback_tickets 表的全部 CRUD 操作及表结构迁移
+ */
 final class TicketRepository
 {
     /** @var PDO */
     private $pdo;
 
+    /**
+     * @param PDO $pdo 数据库连接实例
+     */
     public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;
     }
 
+    /**
+     * 创建 feedback_tickets 表（如不存在），并执行必要的表结构迁移
+     *
+     * @return void
+     */
     public function createTableIfNotExists(): void
     {
                 $sql = <<<SQL
@@ -47,6 +62,11 @@ SQL;
         $this->ensureAttachmentColumns();
     }
 
+    /**
+     * 将旧版 ENUM 类型字段迁移为 TINYINT 整数字段
+     *
+     * @return void
+     */
     private function migrateLegacyEnumColumnsIfNeeded(): void
     {
         $stmt = $this->pdo->query("SHOW COLUMNS FROM feedback_tickets LIKE 'status'");
@@ -75,6 +95,11 @@ SQL;
         );
     }
 
+    /**
+     * 确保附件相关字段存在，不存在则自动添加
+     *
+     * @return void
+     */
     private function ensureAttachmentColumns(): void
     {
         $attachmentColumns = [
@@ -120,6 +145,12 @@ SQL;
         }
     }
 
+    /**
+     * 检查指定列是否存在于 feedback_tickets 表
+     *
+     * @param string $column 列名
+     * @return bool
+     */
     private function columnExists(string $column): bool
     {
         $stmt = $this->pdo->prepare(
@@ -132,6 +163,14 @@ SQL;
         return $stmt->fetch(PDO::FETCH_ASSOC) !== false;
     }
 
+    /**
+     * 查找相同类型、标题、详情的重复工单
+     *
+     * @param int    $type    反馈类型
+     * @param string $title   标题
+     * @param string $details 详情
+     * @return string|false 已存在则返回工单号，否则 false
+     */
     public function findDuplicateTicketNo(int $type, string $title, string $details)
     {
         $stmt = $this->pdo->prepare('SELECT ticket_no FROM feedback_tickets WHERE type = :type AND title = :title AND details = :details LIMIT 1');
@@ -144,6 +183,11 @@ SQL;
         return $stmt->fetchColumn();
     }
 
+    /**
+     * 生成唯一工单号，格式为 FB{YYYYMMDD}{6位十六进制}
+     *
+     * @return string 新工单号
+     */
     public function generateTicketNo(): string
     {
         do {
@@ -156,12 +200,24 @@ SQL;
         return $candidate;
     }
 
+    /**
+     * 插入一条工单记录
+     *
+     * @param array<string, mixed> $ticket 绑定参数数组
+     * @return void
+     */
     public function insertTicket(array $ticket): void
     {
         $stmt = $this->pdo->prepare('INSERT INTO feedback_tickets (ticket_no, type, severity, title, details, contact, attachment_name, attachment_storage, attachment_key, attachment_mime, attachment_size, status, admin_note, created_at, updated_at) VALUES (:ticket_no, :type, :severity, :title, :details, :contact, :attachment_name, :attachment_storage, :attachment_key, :attachment_mime, :attachment_size, :status, :admin_note, :created_at, :updated_at)');
         $stmt->execute($ticket);
     }
 
+    /**
+     * 根据工单号查询单条工单
+     *
+     * @param string $ticketNo 工单号
+     * @return array<string, mixed>|false 工单记录或 false
+     */
     public function findTicketByNo(string $ticketNo)
     {
         $stmt = $this->pdo->prepare('SELECT ticket_no, type, severity, title, details, contact, attachment_name, attachment_storage, attachment_key, attachment_mime, attachment_size, status, admin_note, created_at, updated_at FROM feedback_tickets WHERE ticket_no = :ticket_no LIMIT 1');
@@ -170,6 +226,16 @@ SQL;
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * 管理员工单列表查询（支持筛选 + 分页）
+     *
+     * @param int|null $status   状态筛选
+     * @param int|null $type     类型筛选
+     * @param string   $keyword  标题/内容关键词
+     * @param int      $page     页码
+     * @param int      $pageSize 每页条数
+     * @return array{total: int, items: array<int, array<string, mixed>>}
+     */
     public function listTickets(?int $status = null, ?int $type = null, string $keyword = '', int $page = 1, int $pageSize = 20): array
     {
         $baseSql = ' FROM feedback_tickets WHERE 1=1';
@@ -212,13 +278,22 @@ SQL;
         ];
     }
 
-    public function searchPublicSolvedTickets(string $keyword, int $page = 1, int $pageSize = 20): array
+    /**
+     * 公共工单模糊搜索（玩家问题搜索）
+     *
+     * @param string $keyword  搜索关键词
+     * @param int    $page     页码
+     * @param int    $pageSize 每页条数
+     * @return array{total: int, items: array<int, array<string, mixed>>}
+     */
+    public function searchPublicTickets(string $keyword, int $page = 1, int $pageSize = 20): array
     {
-        $baseSql = ' FROM feedback_tickets WHERE status IN (2, 3)';
+        $baseSql = ' FROM feedback_tickets WHERE 1=1';
         $params = [];
 
         if ($keyword !== '') {
-            $baseSql .= ' AND (title LIKE :keyword_title OR details LIKE :keyword_details OR admin_note LIKE :keyword_note)';
+            $baseSql .= ' AND (ticket_no LIKE :keyword_ticket_no OR title LIKE :keyword_title OR details LIKE :keyword_details OR admin_note LIKE :keyword_note)';
+            $params[':keyword_ticket_no'] = '%' . $keyword . '%';
             $params[':keyword_title'] = '%' . $keyword . '%';
             $params[':keyword_details'] = '%' . $keyword . '%';
             $params[':keyword_note'] = '%' . $keyword . '%';
@@ -229,7 +304,7 @@ SQL;
         $total = (int)$countStmt->fetchColumn();
 
         $offset = ($page - 1) * $pageSize;
-        $sql = 'SELECT ticket_no, type, severity, title, details, status, admin_note, updated_at' . $baseSql . ' ORDER BY updated_at DESC LIMIT :limit OFFSET :offset';
+        $sql = 'SELECT ticket_no, type, severity, title, details, status, admin_note, created_at, updated_at' . $baseSql . ' ORDER BY updated_at DESC LIMIT :limit OFFSET :offset';
 
         $stmt = $this->pdo->prepare($sql);
         foreach ($params as $key => $value) {
@@ -245,6 +320,12 @@ SQL;
         ];
     }
 
+    /**
+     * 检查工单号是否存在
+     *
+     * @param string $ticketNo 工单号
+     * @return bool
+     */
     public function existsByNo(string $ticketNo): bool
     {
         $stmt = $this->pdo->prepare('SELECT id FROM feedback_tickets WHERE ticket_no = :ticket_no LIMIT 1');
@@ -252,6 +333,16 @@ SQL;
         return $stmt->fetchColumn() !== false;
     }
 
+    /**
+     * 更新工单状态、严重程度、管理员备注
+     *
+     * @param string   $ticketNo  工单号
+     * @param int      $status    新状态
+     * @param int|null $severity  新严重程度（非 BUG 工单传 null）
+     * @param string|null $adminNote 管理员备注
+     * @param string   $updatedAt 更新时间
+     * @return void
+     */
     public function updateTicket(string $ticketNo, int $status, ?int $severity, ?string $adminNote, string $updatedAt): void
     {
         $stmt = $this->pdo->prepare('UPDATE feedback_tickets SET status = :status, severity = :severity, admin_note = :admin_note, updated_at = :updated_at WHERE ticket_no = :ticket_no');

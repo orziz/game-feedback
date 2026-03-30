@@ -9,6 +9,7 @@ const props = defineProps<{
   typeFilter:   FeedbackType | null
   keyword:      string
   loading:      boolean
+  compact?:     boolean
 }>()
 
 const emit = defineEmits<{
@@ -16,7 +17,6 @@ const emit = defineEmits<{
   'update:typeFilter':   [value: FeedbackType | null]
   'update:keyword':      [value: string]
   refresh: []
-  logout:  []
 }>()
 
 const { t } = useI18n()
@@ -40,19 +40,16 @@ const keywordModel = computed({
 </script>
 
 <template>
-  <div class="admin-filters-shell">
+  <div class="admin-filters-shell" :class="{ 'admin-filters-shell--compact': compact }">
     <div class="admin-filters-shell__intro">
-      <p class="admin-filters-shell__eyebrow">{{ t('admin.filtersEyebrow') }}</p>
+      <p v-if="!compact" class="admin-filters-shell__eyebrow">{{ t('admin.filtersEyebrow') }}</p>
       <h3>{{ t('admin.filtersTitle') }}</h3>
-      <p>{{ t('admin.filtersDescription') }}</p>
+      <p v-if="!compact">{{ t('admin.filtersDescription') }}</p>
     </div>
 
     <div class="admin-filters-shell__actions">
       <el-button :loading="loading" type="primary" plain @click="emit('refresh')">
         {{ t('common.refresh') }}
-      </el-button>
-      <el-button type="danger" plain @click="emit('logout')">
-        {{ t('common.logout') }}
       </el-button>
     </div>
 
@@ -140,6 +137,29 @@ const keywordModel = computed({
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+}
+
+.admin-filters-shell--compact {
+  gap: 10px 14px;
+  padding: 14px 16px;
+  border-radius: 18px;
+}
+
+.admin-filters-shell--compact .admin-filters-shell__intro {
+  gap: 4px;
+}
+
+.admin-filters-shell--compact .admin-filters-shell__intro h3 {
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.admin-filters-shell--compact .admin-filters-shell__actions {
+  align-items: center;
+}
+
+.admin-filters-shell--compact .admin-filters {
+  gap: 8px;
 }
 
 @media (max-width: 900px) {

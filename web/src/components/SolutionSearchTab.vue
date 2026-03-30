@@ -2,35 +2,74 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { searchTickets } from '../services/feedbackService'
+import { api } from '../api/client'
 import { getStatusTagType, getFeedbackTypeTagType } from '../i18n'
 import { getErrorMessage } from '../utils/errors'
 import { useAppStore } from '../stores/app'
+import TicketProgress from './TicketProgress.vue'
 
 const { t } = useI18n()
 const appStore = useAppStore()
 const keyword   = ref('')
 const searching = ref(false)
-const results   = ref<TicketRecord[]>([])
+const results   = ref<TicketSearchResponse['tickets']>([])
 const total     = ref(0)
+const expandedTicketNos = ref<string[]>([])
+
+function isTicketNoKeyword(value: string): boolean {
+  return /^FB\d{8}[A-F0-9]{6}$/.test(value)
+}
 
 async function handleSearch(): Promise<void> {
   if (!keyword.value.trim()) {
     ElMessage.warning(t('messages.keywordRequired'))
     return
   }
+  const trimmedKeyword = keyword.value.trim()
+
   searching.value = true
   results.value   = []
   total.value     = 0
+  expandedTicketNos.value = []
   try {
-    const data  = await searchTickets(keyword.value)
+    const data = await api.feedback.Ticket.get.search({ keyword: trimmedKeyword })
     results.value = data.tickets
     total.value   = data.pagination?.total ?? results.value.length
+    expandedTicketNos.value = isTicketNoKeyword(trimmedKeyword)
+      ? results.value.map((ticket) => ticket.ticket_no)
+      : []
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('messages.contentSearchFailed')))
   } finally {
     searching.value = false
   }
+}
+
+function severityClass(severity: Severity): string {
+  if (severity === 0) return 'severity-badge--low'
+  if (severity === 1) return 'severity-badge--medium'
+  if (severity === 2) return 'severity-badge--high'
+  return 'severity-badge--critical'
+}
+
+function statusToneClass(status: TicketStatus): string {
+  if (status === 0) return 'ticket-state--pending'
+  if (status === 1) return 'ticket-state--in-progress'
+  if (status === 2) return 'ticket-state--resolved'
+  return 'ticket-state--closed'
+}
+
+function isExpanded(ticketNo: string): boolean {
+  return expandedTicketNos.value.includes(ticketNo)
+}
+
+function toggleExpanded(ticketNo: string): void {
+  if (isExpanded(ticketNo)) {
+    expandedTicketNos.value = expandedTicketNos.value.filter((value) => value !== ticketNo)
+    return
+  }
+
+  expandedTicketNos.value = [...expandedTicketNos.value, ticketNo]
 }
 </script>
 
@@ -55,31 +94,363 @@ async function handleSearch(): Promise<void> {
     :description="t('solutionSearch.empty')"
   />
 
-  <el-card v-for="item in results" :key="item.ticket_no" class="ticket-card solution-card">
-    <template #header>
-      <div class="ticket-head solution-card-head">
-        <span class="solution-title">{{ item.title }}</span>
-        <el-tag :type="getStatusTagType(item.status)" effect="dark" size="small">
-          {{ appStore.getStatusLabel(item.status) }}
-        </el-tag>
-      </div>
-    </template>
-    <p><strong>{{ t('common.ticketNo') }}:</strong> {{ item.ticket_no }}</p>
-    <p>
-      <strong>{{ t('common.type') }}:</strong>
-      <el-tag :type="getFeedbackTypeTagType(item.type)" effect="light" size="small">
-        {{ appStore.getTypeLabel(item.type) }}
-      </el-tag>
-    </p>
-    <p><strong>{{ t('solutionSearch.content') }}:</strong> <span class="multiline-text">{{ item.details }}</span></p>
-    <p><strong>{{ t('solutionSearch.handling') }}:</strong> <span class="multiline-text">{{ item.admin_note || t('common.none') }}</span></p>
-    <p><strong>{{ t('common.updatedAt') }}:</strong> {{ item.updated_at }}</p>
-  </el-card>
+  <div v-if="results.length > 0" class="solution-search__list">
+    <article
+      v-for="item in results"
+      :key="item.ticket_no"
+      class="solution-search__card"
+      :class="[statusToneClass(item.status), { 'is-expanded': isExpanded(item.ticket_no) }]"
+    >
+      <button
+        type="button"
+        class="solution-search__card-header"
+        @click="toggleExpanded(item.ticket_no)"
+      >
+        <div class="solution-search__card-header-accent"></div>
+        <div class="solution-search__card-main">
+          <div class="solution-search__collapse-main">
+            <div class="solution-search__collapse-title">{{ item.title }}</div>
+            <div class="solution-search__collapse-subline">
+              <span class="solution-search__collapse-ticket">{{ item.ticket_no }}</span>
+              <span class="solution-search__collapse-time">{{ t('common.updatedAt') }} {{ item.updated_at }}</span>
+            </div>
+          </div>
+
+          <div class="solution-search__card-side">
+            <el-tag :type="getStatusTagType(item.status)" effect="dark" size="small" round class="solution-search__collapse-tag">
+              {{ appStore.getStatusLabel(item.status) }}
+            </el-tag>
+            <span class="solution-search__card-arrow" :class="{ 'is-expanded': isExpanded(item.ticket_no) }"></span>
+          </div>
+        </div>
+      </button>
+
+        <div
+          v-show="isExpanded(item.ticket_no)"
+          class="solution-search__card-body"
+        >
+          <section class="solution-search__panel">
+            <div class="solution-search__panel-top">
+              <TicketProgress :status="item.status" :show-summary="false" />
+            </div>
+
+            <section class="ticket-detail-card__meta">
+              <div class="ticket-field">
+                <span class="ticket-field__label">{{ t('common.type') }}</span>
+                <div class="ticket-field__value">
+                  <el-tag :type="getFeedbackTypeTagType(item.type)" effect="light" size="small">
+                    {{ appStore.getTypeLabel(item.type) }}
+                  </el-tag>
+                </div>
+              </div>
+
+              <div v-if="item.severity !== null" class="ticket-field">
+                <span class="ticket-field__label">{{ t('common.severity') }}</span>
+                <div class="ticket-field__value">
+                  <span class="severity-badge" :class="severityClass(item.severity)">
+                    {{ appStore.getSeverityLabel(item.severity) }}
+                  </span>
+                </div>
+              </div>
+
+              <div class="ticket-field">
+                <span class="ticket-field__label">{{ t('common.createdAt') }}</span>
+                <div class="ticket-field__value">{{ item.created_at }}</div>
+              </div>
+            </section>
+
+            <section class="ticket-section">
+              <div class="ticket-section__label">{{ t('solutionSearch.content') }}</div>
+              <div class="ticket-section__body multiline-text">{{ item.details }}</div>
+            </section>
+
+            <section class="ticket-section ticket-section--note">
+              <div class="ticket-section__label">{{ t('solutionSearch.handling') }}</div>
+              <div class="ticket-section__body multiline-text">{{ item.admin_note || t('common.none') }}</div>
+            </section>
+          </section>
+        </div>
+    </article>
+  </div>
 </template>
 
 <style scoped>
+.solution-search__list {
+  margin-top: 12px;
+  display: grid;
+  gap: 14px;
+}
+
+.solution-search__card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  border: 1px solid rgba(203, 213, 225, 0.96);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 252, 0.96));
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.07);
+  transition: box-shadow 0.24s ease, transform 0.24s ease, border-color 0.24s ease;
+}
+
+.solution-search__card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 22px 44px rgba(15, 23, 42, 0.1);
+}
+
+.solution-search__card.is-expanded {
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.12);
+}
+
+.solution-search__card-header {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.solution-search__card-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+  padding: 18px 20px 18px 22px;
+}
+
+.solution-search__card-header-accent {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 6px;
+  background: transparent;
+}
+
+.solution-search__collapse-main {
+  min-width: 0;
+}
+
+.solution-search__collapse-title {
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.solution-search__collapse-subline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 6px;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.solution-search__collapse-ticket {
+  font-family: 'Cascadia Mono', 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+}
+
+.solution-search__collapse-time {
+  white-space: nowrap;
+}
+
+.solution-search__collapse-tag {
+  flex-shrink: 0;
+}
+
+.solution-search__card-side {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.solution-search__card-arrow {
+  width: 11px;
+  height: 11px;
+  border-right: 2px solid #7c8b99;
+  border-bottom: 2px solid #7c8b99;
+  transform: rotate(45deg) translateY(-1px);
+  transform-origin: center;
+  transition: transform 0.22s ease, border-color 0.22s ease;
+}
+
+.solution-search__card-arrow.is-expanded {
+  transform: rotate(225deg) translateY(-1px);
+}
+
+.solution-search__card-body {
+  border-top: 1px solid rgba(226, 232, 240, 0.95);
+  background: linear-gradient(180deg, rgba(252, 254, 255, 0.98), rgba(247, 250, 252, 0.98));
+}
+
+.solution-search__panel {
+  padding: 20px 20px 22px;
+}
+
+.solution-search__panel-top {
+  margin-bottom: 18px;
+}
+
+.ticket-detail-card {
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  border-left-width: 6px;
+  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.08);
+}
+
+.ticket-detail-card__meta {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 18px;
+}
+
+.ticket-field {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.ticket-field__label {
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.ticket-field__value {
+  min-width: 0;
+  color: var(--ink);
+}
+
+.ticket-section {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 14px;
+  padding-top: 16px;
+  margin-top: 16px;
+  border-top: 1px solid rgba(226, 232, 240, 0.92);
+}
+
+.ticket-section--note {
+  background: linear-gradient(180deg, rgba(247, 250, 252, 0), rgba(248, 250, 252, 0.85));
+}
+
+.ticket-section__label {
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.ticket-section__body {
+  min-width: 0;
+  line-height: 1.72;
+}
+
 .multiline-text {
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.severity-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.severity-badge--low {
+  color: #166534;
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.severity-badge--medium {
+  color: #a16207;
+  border-color: #fcd34d;
+  background: #fffbeb;
+}
+
+.severity-badge--high {
+  color: #c2410c;
+  border-color: #fdba74;
+  background: #fff7ed;
+}
+
+.severity-badge--critical {
+  color: #b91c1c;
+  border-color: #fca5a5;
+  background: #fef2f2;
+  box-shadow: inset 0 0 0 1px rgba(185, 28, 28, 0.1);
+}
+
+.ticket-state--pending {
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.ticket-state--pending .solution-search__card-header-accent {
+  background: linear-gradient(180deg, #f59e0b, #fbbf24);
+}
+
+.ticket-state--in-progress {
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
+.ticket-state--in-progress .solution-search__card-header-accent {
+  background: linear-gradient(180deg, #3b82f6, #60a5fa);
+}
+
+.ticket-state--resolved {
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.ticket-state--resolved .solution-search__card-header-accent {
+  background: linear-gradient(180deg, #10b981, #34d399);
+}
+
+.ticket-state--closed {
+  border-color: rgba(100, 116, 139, 0.35);
+}
+
+.ticket-state--closed .solution-search__card-header-accent {
+  background: linear-gradient(180deg, #64748b, #94a3b8);
+}
+
+@media (max-width: 768px) {
+  .solution-search__card-main,
+  .ticket-field,
+  .ticket-section {
+    grid-template-columns: 1fr;
+  }
+
+  .solution-search__card-main,
+  .solution-search__card-side {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .solution-search__card-main {
+    padding: 16px 16px 16px 18px;
+  }
+
+  .solution-search__panel {
+    padding: 18px 16px 20px;
+  }
+
+  .ticket-field,
+  .ticket-section {
+    gap: 8px;
+  }
 }
 </style>

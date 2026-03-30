@@ -48,7 +48,8 @@ function severityClass(severity: Severity | null): string {
     <el-table
       :data="tickets"
       stripe
-      height="360"
+      height="100%"
+      size="small"
       v-loading="loading"
       class="admin-table"
       @row-click="(row: TicketRecord) => emit('select', row.ticket_no)"
@@ -90,6 +91,7 @@ function severityClass(severity: Severity | null): string {
 
     <el-pagination
       class="admin-pagination"
+      small
       layout="total, sizes, prev, pager, next"
       :current-page="page"
       :page-size="pageSize"
@@ -104,6 +106,8 @@ function severityClass(severity: Severity | null): string {
 <style scoped>
 .admin-table-shell {
   display: flex;
+  flex: 1;
+  min-height: 0;
   flex-direction: column;
   gap: 14px;
 }
@@ -129,6 +133,11 @@ function severityClass(severity: Severity | null): string {
 
 .admin-table-shell__caption { color: var(--ink-soft); }
 .admin-table { width: 100%; }
+.admin-table {
+  flex: 1;
+  min-height: 320px;
+}
+.admin-table :deep(.el-table__inner-wrapper) { height: 100%; }
 .admin-pagination { justify-content: flex-end; }
 
 .compact-tag :deep(.el-tag__content) {

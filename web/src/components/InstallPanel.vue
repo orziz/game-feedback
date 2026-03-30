@@ -14,6 +14,7 @@ const form = ref<InstallForm>({
   database:      '',
   username:      'root',
   password:      '',
+  adminUsername: 'admin',
   adminPassword: '',
   uploadMode:    'off',
   qiniuAccessKey: '',
@@ -43,6 +44,12 @@ const form = ref<InstallForm>({
       </el-form-item>
       <el-form-item :label="t('install.dbPassword')">
         <el-input v-model="form.password" type="password" show-password />
+      </el-form-item>
+      <el-form-item :label="t('install.adminUsername')">
+        <el-input
+          v-model="form.adminUsername"
+          :placeholder="t('install.adminUsernamePlaceholder')"
+        />
       </el-form-item>
       <el-form-item :label="t('install.adminPassword')">
         <el-input

@@ -2,21 +2,29 @@
 
 declare(strict_types=1);
 
+namespace GameFeedback\Support;
+
 final class AdminToken
 {
-    public static function create(string $hash): string
+    private const TTL = 12 * 3600;
+
+    public static function create(int $userId, string $passwordHash, string $appSecret): string
     {
         $timestamp = time();
         $nonce = bin2hex(random_bytes(8));
-        $payload = $timestamp . '|' . $nonce;
-        $signature = hash_hmac('sha256', $payload, $hash);
+        $passwordMarker = self::buildPasswordMarker($passwordHash, $appSecret);
+        $payload = $userId . '|' . $timestamp . '|' . $nonce . '|' . $passwordMarker;
+        $signature = hash_hmac('sha256', $payload, $appSecret);
 
         return rtrim(strtr(base64_encode($payload . '|' . $signature), '+/', '-_'), '=');
     }
 
-    public static function verify(string $token, string $hash): bool
+    /**
+     * @return array{userId:int, passwordMarker:string}|false
+     */
+    public static function verify(string $token, string $appSecret)
     {
-        if ($token === '' || $hash === '') {
+        if ($token === '' || $appSecret === '') {
             return false;
         }
 
@@ -32,26 +40,39 @@ final class AdminToken
         }
 
         $parts = explode('|', $decoded);
-        if (count($parts) !== 3) {
+        if (count($parts) !== 5) {
             return false;
         }
 
-        $timestampRaw = $parts[0];
-        $nonce = $parts[1];
-        $signature = $parts[2];
+        $userIdRaw = $parts[0];
+        $timestampRaw = $parts[1];
+        $nonce = $parts[2];
+        $passwordMarker = $parts[3];
+        $signature = $parts[4];
 
-        if (!ctype_digit($timestampRaw) || $nonce === '' || $signature === '') {
+        if (!ctype_digit($userIdRaw) || !ctype_digit($timestampRaw) || $nonce === '' || $passwordMarker === '' || $signature === '') {
             return false;
         }
 
         $timestamp = (int)$timestampRaw;
-        if ($timestamp < time() - 86400) {
+        if ($timestamp < time() - self::TTL) {
             return false;
         }
 
-        $payload = $timestampRaw . '|' . $nonce;
-        $expected = hash_hmac('sha256', $payload, $hash);
+        $payload = $userIdRaw . '|' . $timestampRaw . '|' . $nonce . '|' . $passwordMarker;
+        $expected = hash_hmac('sha256', $payload, $appSecret);
+        if (!hash_equals($expected, $signature)) {
+            return false;
+        }
 
-        return hash_equals($expected, $signature);
+        return [
+            'userId' => (int)$userIdRaw,
+            'passwordMarker' => $passwordMarker,
+        ];
+    }
+
+    public static function buildPasswordMarker(string $passwordHash, string $appSecret): string
+    {
+        return hash_hmac('sha256', $passwordHash, $appSecret);
     }
 }
