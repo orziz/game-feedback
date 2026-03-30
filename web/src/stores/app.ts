@@ -1,0 +1,132 @@
+import { computed, ref } from 'vue'
+import { defineStore } from 'pinia'
+import { ElMessage } from 'element-plus'
+import { i18n } from '../i18n'
+import { checkInstallStatus, fetchEnumOptions, installSystem as installSystemRequest } from '../services/feedbackService'
+import { getErrorMessage } from '../utils/errors'
+
+export const useAppStore = defineStore('app', () => {
+  const isInstalled = ref(false)
+  const checkingInstall = ref(false)
+  const installLoading = ref(false)
+  const activeTab = ref<AppTab>('submit')
+  const pendingTicketNo = ref('')
+  const initialized = ref(false)
+  const uploadMode = ref<UploadMode>('off')
+  const typeOptions = ref<EnumOption<FeedbackType>[]>([])
+  const severityOptions = ref<EnumOption<Severity>[]>([])
+  const statusOptions = ref<EnumOption<TicketStatus>[]>([])
+
+  const typeLabelMap = computed<Record<number, string>>(() =>
+    Object.fromEntries(typeOptions.value.map((item) => [item.value, item.label])),
+  )
+  const severityLabelMap = computed<Record<number, string>>(() =>
+    Object.fromEntries(severityOptions.value.map((item) => [item.value, item.label])),
+  )
+  const statusLabelMap = computed<Record<number, string>>(() =>
+    Object.fromEntries(statusOptions.value.map((item) => [item.value, item.label])),
+  )
+
+  async function initialize(): Promise<void> {
+    if (initialized.value) {
+      return
+    }
+    initialized.value = true
+    await Promise.all([refreshInstallStatus(), refreshEnumOptions()])
+  }
+
+  async function refreshEnumOptions(locale: LocaleCode = i18n.global.locale.value as LocaleCode): Promise<void> {
+    const { t } = i18n.global
+    try {
+      const data = await fetchEnumOptions(locale)
+      typeOptions.value = data.types
+      severityOptions.value = data.severities
+      statusOptions.value = data.statuses
+    } catch (error) {
+      ElMessage.error(getErrorMessage(error, t('messages.requestFailed')))
+    }
+  }
+
+  async function refreshInstallStatus(): Promise<void> {
+    const { t } = i18n.global
+    checkingInstall.value = true
+    try {
+      const data = await checkInstallStatus()
+      isInstalled.value = Boolean(data.installed)
+      uploadMode.value = data.uploadMode || 'off'
+    } catch (error) {
+      isInstalled.value = false
+      uploadMode.value = 'off'
+      ElMessage.error(getErrorMessage(error, t('messages.installStatusError')))
+    } finally {
+      checkingInstall.value = false
+    }
+  }
+
+  async function installSystem(payload: InstallForm): Promise<void> {
+    const { t } = i18n.global
+    installLoading.value = true
+    try {
+      await installSystemRequest(payload)
+      isInstalled.value = true
+      uploadMode.value = payload.uploadMode
+      activeTab.value = 'submit'
+      ElMessage.success(t('messages.installSuccess'))
+    } catch (error) {
+      ElMessage.error(getErrorMessage(error, t('messages.installFailed')))
+      throw error
+    } finally {
+      installLoading.value = false
+    }
+  }
+
+  function setActiveTab(tab: AppTab): void {
+    activeTab.value = tab
+  }
+
+  function openQueryWithTicket(ticketNo: string): void {
+    pendingTicketNo.value = ticketNo
+    activeTab.value = 'query'
+  }
+
+  function clearPendingTicket(): void {
+    pendingTicketNo.value = ''
+  }
+
+  function getTypeLabel(value: FeedbackType): string {
+    return typeLabelMap.value[value] || String(value)
+  }
+
+  function getSeverityLabel(value: Severity): string {
+    return severityLabelMap.value[value] || String(value)
+  }
+
+  function getStatusLabel(value: TicketStatus): string {
+    return statusLabelMap.value[value] || String(value)
+  }
+
+  return {
+    isInstalled,
+    checkingInstall,
+    installLoading,
+    activeTab,
+    pendingTicketNo,
+    uploadMode,
+    typeOptions,
+    severityOptions,
+    statusOptions,
+    typeLabelMap,
+    severityLabelMap,
+    statusLabelMap,
+    initialize,
+    refreshInstallStatus,
+    refreshEnumOptions,
+    installSystem,
+    setActiveTab,
+    openQueryWithTicket,
+    clearPendingTicket,
+    getTypeLabel,
+    getSeverityLabel,
+    getStatusLabel,
+  }
+})
