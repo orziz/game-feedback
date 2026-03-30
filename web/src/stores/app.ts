@@ -11,12 +11,14 @@ import { getErrorMessage } from '../utils/errors'
  * 管理安装状态、当前 Tab、枚举选项、上传模式等全局状态
  */
 export const useAppStore = defineStore('app', () => {
+  const defaultUploadMaxBytes = 5 * 1024 * 1024
   const isInstalled = ref(false)
   const checkingInstall = ref(false)
   const installLoading = ref(false)
   const activeTab = ref<AppTab>('submit')
   const initialized = ref(false)
   const uploadMode = ref<UploadMode>('off')
+  const uploadMaxBytes = ref(defaultUploadMaxBytes)
   const typeOptions = ref<EnumOption<FeedbackType>[]>([])
   const severityOptions = ref<EnumOption<Severity>[]>([])
   const statusOptions = ref<EnumOption<TicketStatus>[]>([])
@@ -58,9 +60,11 @@ export const useAppStore = defineStore('app', () => {
       const data = await api.system.Status.get.installStatus()
       isInstalled.value = Boolean(data.installed)
       uploadMode.value = data.uploadMode || 'off'
+      uploadMaxBytes.value = Number(data.uploadMaxBytes) > 0 ? Number(data.uploadMaxBytes) : defaultUploadMaxBytes
     } catch (error) {
       isInstalled.value = false
       uploadMode.value = 'off'
+      uploadMaxBytes.value = defaultUploadMaxBytes
       ElMessage.error(getErrorMessage(error, t('messages.installStatusError')))
     } finally {
       checkingInstall.value = false
@@ -119,6 +123,7 @@ export const useAppStore = defineStore('app', () => {
     installLoading,
     activeTab,
     uploadMode,
+    uploadMaxBytes,
     typeOptions,
     severityOptions,
     statusOptions,

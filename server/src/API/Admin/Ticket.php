@@ -225,6 +225,7 @@ final class Ticket extends AdminSubModule
                     $snippet = function_exists('mb_substr') ? mb_substr($lastBody, 0, 180, 'UTF-8') : substr($lastBody, 0, 180);
                     $message .= ' ' . $snippet;
                 }
+                $message .= $this->getQiniuDownloadHint();
                 Responder::error('QINIU_DOWNLOAD_FAILED', $message, 500);
             }
 

@@ -37,7 +37,7 @@ const form = ref<InstallForm>({
         <el-input-number v-model="form.port" :min="1" :max="65535" />
       </el-form-item>
       <el-form-item :label="t('install.dbName')">
-        <el-input v-model="form.database" placeholder="feedback_form" />
+        <el-input v-model="form.database" placeholder="game_feedback" />
       </el-form-item>
       <el-form-item :label="t('install.dbUser')">
         <el-input v-model="form.username" placeholder="root" />

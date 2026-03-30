@@ -38,10 +38,16 @@ final class Status extends BaseApiSubModule
 
     protected function installStatus(): void
     {
+        $uploadMaxBytes = (int)($this->dbConfig['upload_max_bytes'] ?? 5 * 1024 * 1024);
+        if ($uploadMaxBytes <= 0) {
+            $uploadMaxBytes = 5 * 1024 * 1024;
+        }
+
         Responder::send([
             'ok' => true,
             'installed' => $this->installed,
             'uploadMode' => (string)($this->dbConfig['upload_mode'] ?? 'off'),
+            'uploadMaxBytes' => $uploadMaxBytes,
         ]);
     }
 }

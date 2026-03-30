@@ -103,6 +103,7 @@ final class SystemInstaller
             'password' => $password,
             'app_secret' => $appSecret,
             'upload_mode' => $uploadMode,
+            'upload_max_bytes' => 5 * 1024 * 1024,
             'qiniu_access_key' => $qiniuAccessKey,
             'qiniu_secret_key' => $qiniuSecretKey,
             'qiniu_bucket' => $qiniuBucket,

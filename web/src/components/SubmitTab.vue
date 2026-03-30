@@ -10,13 +10,20 @@ import { useAppStore } from '../stores/app'
 const { t } = useI18n()
 const submitting = ref(false)
 const appStore = useAppStore()
-const { typeOptions, severityOptions, uploadMode } = storeToRefs(appStore)
+const { typeOptions, severityOptions, uploadMode, uploadMaxBytes } = storeToRefs(appStore)
 const defaultType: FeedbackType = 0
 const defaultSeverity: Severity = 1
-const maxAttachmentSize = 5 * 1024 * 1024
 const canUploadAttachment = computed(() => uploadMode.value !== 'off')
 const attachmentInputRef = ref<HTMLInputElement | null>(null)
 const bugType: FeedbackType = 0
+
+const maxAttachmentSize = computed(() => (uploadMaxBytes.value > 0 ? uploadMaxBytes.value : 5 * 1024 * 1024))
+const maxAttachmentSizeMb = computed(() => {
+  const mb = maxAttachmentSize.value / 1024 / 1024
+  const normalized = Number.isInteger(mb) ? String(mb) : mb.toFixed(2).replace(/\.?0+$/, '')
+  return normalized
+})
+const attachmentTipText = computed(() => t('submitForm.attachmentTip', { size: maxAttachmentSizeMb.value }))
 
 const detailLabel = computed(() => (form.value.type === bugType ? t('submitForm.steps') : t('submitForm.description')))
 const detailPlaceholder = computed(() => (
@@ -58,8 +65,8 @@ function handleAttachmentChange(event: Event): void {
     return
   }
 
-  if (file.size > maxAttachmentSize) {
-    ElMessage.warning(t('messages.uploadSizeInvalid'))
+  if (file.size > maxAttachmentSize.value) {
+    ElMessage.warning(t('messages.uploadSizeInvalid', { size: maxAttachmentSizeMb.value }))
     target.value = ''
     form.value.attachmentFile = null
     return
@@ -220,13 +227,13 @@ async function handleSubmit(): Promise<void> {
             {{ t('submitForm.attachment') }}
           </el-button>
           <div class="submit-attachment__name" :class="{ 'is-empty': !form.attachmentFile }">
-            {{ form.attachmentFile?.name || t('submitForm.attachmentTip') }}
+            {{ form.attachmentFile?.name || attachmentTipText }}
           </div>
           <el-button v-if="form.attachmentFile" text @click="clearAttachment">
             {{ t('submitForm.clearAttachment') }}
           </el-button>
         </div>
-        <p class="submit-attachment__tip">{{ t('submitForm.attachmentTip') }}</p>
+        <p class="submit-attachment__tip">{{ attachmentTipText }}</p>
         <p v-if="!canUploadAttachment" class="submit-attachment__disabled">{{ t('submitForm.attachmentDisabled') }}</p>
       </div>
     </div>

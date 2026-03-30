@@ -80,7 +80,7 @@ cd /path/to/feedbackForm
 首次安装前，请先在 MySQL 中手动创建一个空数据库，例如：
 
 ```sql
-CREATE DATABASE feedback_form DEFAULT CHARACTER SET utf8mb4;
+CREATE DATABASE game_feedback DEFAULT CHARACTER SET utf8mb4;
 ```
 
 注意：
@@ -139,7 +139,7 @@ http://127.0.0.1:8000/index.php
 
 1. `数据库地址`：例如 `127.0.0.1`
 2. `数据库端口`：默认 `3306`
-3. `数据库名`：填写你提前创建好的数据库名，例如 `feedback_form`
+3. `数据库名`：填写你提前创建好的数据库名，例如 `game_feedback`
 4. `数据库用户`：例如 `root`
 5. `数据库密码`：对应 MySQL 用户密码
 6. `管理员密码`：用于后台登录，本地测试可留空
@@ -148,7 +148,7 @@ http://127.0.0.1:8000/index.php
 
 1. 连接 MySQL
 2. 创建 `feedback_tickets` 数据表
-3. 在 `server/config/database.php` 生成数据库配置和管理员密码哈希
+3. 在 `server/config/database.php` 生成数据库与上传相关配置
 
 安装成功后，页面会自动切换到正常使用状态。
 
@@ -236,15 +236,25 @@ FB20260330A1B2C3
 该文件包含：
 
 - 数据库连接信息
-- 管理员密码哈希
+- 上传模式（`upload_mode`）
+- 附件大小上限（`upload_max_bytes`，单位：字节）
+- 七牛云相关参数（当上传模式为 `qiniu` 时）
 
 请不要把这个文件提交到公开仓库。
+
+上传大小限制采用“后端配置统一下发”的方式：
+
+1. 后端读取 `upload_max_bytes` 作为实际校验上限
+2. `s=system/Status/installStatus` 返回 `uploadMaxBytes`
+3. 前端使用 `uploadMaxBytes` 做选择文件时的大小校验与文案展示
+
+如果你修改了 `upload_max_bytes`，建议同时确认网关层允许更大的请求体，例如 Nginx 的 `client_max_body_size` 应该大于或等于该值。
 
 ### 前端接口代理
 
 开发环境代理配置位于：
 
-- `web/vite.config.js`
+- `web/vite.config.ts`
 
 默认规则是：
 
@@ -280,7 +290,7 @@ FB20260330A1B2C3
 
 1. PHP 内置服务是否已经启动
 2. 前端是否通过 `npm run dev` 启动
-3. `web/vite.config.js` 中代理地址是否正确
+3. `web/vite.config.ts` 中代理地址是否正确
 
 ## 打包与部署
 
@@ -306,7 +316,7 @@ npm run build
 后端当前已经实现以下接口：
 
 - `s=system/Status/health`：健康检查
-- `s=system/Status/installStatus`：安装状态检查
+- `s=system/Status/installStatus`：安装状态检查（返回 `installed`、`uploadMode`、`uploadMaxBytes`）
 - `s=system/Setup/enumOptions`：枚举选项
 - `s=system/Setup/install`：首次安装
 - `s=feedback/Ticket/submit`：提交反馈

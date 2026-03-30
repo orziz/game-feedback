@@ -56,9 +56,13 @@ final class AttachmentUploader
             Responder::error('INVALID_UPLOAD_FILE', 'Invalid uploaded file.', 422);
         }
 
-        $maxBytes = 5 * 1024 * 1024;
+        $maxBytes = (int)($this->dbConfig['upload_max_bytes'] ?? 5 * 1024 * 1024);
+        if ($maxBytes <= 0) {
+            $maxBytes = 5 * 1024 * 1024;
+        }
         if ($size > $maxBytes) {
-            Responder::error('UPLOAD_TOO_LARGE', 'Attachment size must be less than or equal to 5MB.', 422);
+            $maxSizeMb = rtrim(rtrim(number_format($maxBytes / 1024 / 1024, 2, '.', ''), '0'), '.');
+            Responder::error('UPLOAD_TOO_LARGE', 'Attachment size must be less than or equal to ' . $maxSizeMb . 'MB.', 422);
         }
 
         $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
