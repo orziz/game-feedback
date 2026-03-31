@@ -11,30 +11,36 @@ use GameFeedback\Support\Responder;
 final class User extends AdminSubModule
 {
     /**
-     * @return array<string, array{methods: array<int, string>, allow_before_install?: bool}>
+     * @return array<string, array{
+     *   methods: array<int, string>,
+     *   allow_before_install?: bool,
+     *   auth?: string
+     * }>
      */
     protected function actionMeta(): array
     {
         return [
             'list' => [
-                'methods' => ['GET'],
+                self::META_METHODS => ['GET'],
+                self::META_AUTH => self::AUTH_SUPER_ADMIN,
             ],
             'create' => [
-                'methods' => ['POST'],
+                self::META_METHODS => ['POST'],
+                self::META_AUTH => self::AUTH_SUPER_ADMIN,
             ],
             'delete' => [
-                'methods' => ['POST'],
+                self::META_METHODS => ['POST'],
+                self::META_AUTH => self::AUTH_SUPER_ADMIN,
             ],
             'resetPassword' => [
-                'methods' => ['POST'],
+                self::META_METHODS => ['POST'],
+                self::META_AUTH => self::AUTH_SUPER_ADMIN,
             ],
         ];
     }
 
     protected function list(): void
     {
-        $this->ensureSuperAdmin();
-
         Responder::send([
             'ok' => true,
             'users' => $this->createUserRepository()->listUsers(),
@@ -43,8 +49,6 @@ final class User extends AdminSubModule
 
     protected function create(): void
     {
-        $this->ensureSuperAdmin();
-
         $payload = Request::jsonBody();
         $username = $this->sanitizer->sanitizeSingleLine((string)($payload['username'] ?? ''), 64);
         $password = $this->sanitizer->sanitizeSingleLine((string)($payload['password'] ?? ''), 128);
@@ -81,8 +85,6 @@ final class User extends AdminSubModule
 
     protected function delete(): void
     {
-        $this->ensureSuperAdmin();
-
         $payload = Request::jsonBody();
         $id = (int)($payload['id'] ?? 0);
 
@@ -103,8 +105,6 @@ final class User extends AdminSubModule
 
     protected function resetPassword(): void
     {
-        $this->ensureSuperAdmin();
-
         $payload = Request::jsonBody();
         $id = (int)($payload['id'] ?? 0);
         $newPassword = $this->sanitizer->sanitizeSingleLine((string)($payload['password'] ?? ''), 128);

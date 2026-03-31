@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+// PSR-4 风格自动加载：仅处理 GameFeedback 命名空间下的类。
+
 spl_autoload_register(static function ($className) {
     $prefix = 'GameFeedback\\';
     $prefixLength = strlen($prefix);

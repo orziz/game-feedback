@@ -7,6 +7,9 @@ namespace GameFeedback\Support;
 use GameFeedback\Enums\UserRole;
 use GameFeedback\Repository\UserRepository;
 
+/**
+ * 安装器：负责首次安装时的数据库连通校验、基础表创建和超级管理员初始化。
+ */
 final class SystemInstaller
 {
     /** @var string */
@@ -26,6 +29,7 @@ final class SystemInstaller
      */
     public function install(array $payload): void
     {
+        // 已安装场景直接拦截，避免重复覆盖配置
         if (is_file($this->databaseConfigPath)) {
             Responder::error('ALREADY_INSTALLED', 'The system is already installed.', 409);
         }
@@ -75,7 +79,8 @@ final class SystemInstaller
             Responder::error('MISSING_QINIU_CONFIG', 'Qiniu mode requires AccessKey, SecretKey, Bucket, and Domain.', 422);
         }
 
-        $pdo = Database::createPdo($host, $port, $database, $username, $password);
+        // 安装流程允许暴露数据库连接错误详情，便于用户修正安装参数
+        $pdo = Database::createPdo($host, $port, $database, $username, $password, true);
         $schemaMigrationManager = new SchemaMigrationManager($pdo);
 
         $schemaMigrationManager->installLatestSchema();
@@ -84,6 +89,7 @@ final class SystemInstaller
 
         $existing = $userRepo->findByUsername($adminUsername);
         if (!$existing) {
+            // 首次安装创建超级管理员
             $userRepo->insertUser(
                 $adminUsername,
                 password_hash($adminPassword, PASSWORD_DEFAULT),
@@ -113,6 +119,7 @@ final class SystemInstaller
             'schema_version' => SchemaMigrationManager::CURRENT_SCHEMA_VERSION,
         ];
 
+        // 将安装后的完整配置持久化到 database.php
         Database::writeConfig($this->databaseConfigPath, $databaseConfig);
 
         Responder::send([

@@ -52,7 +52,9 @@ final class App
     {
         $route = $this->resolveRoute();
 
-        if ($this->installed) {
+        if ($this->installed && UserSystemMigrator::needsMigration($this->dbConfig)) {
+            // 仅在确实需要迁移时（schema 版本落后或存在遗留配置）才创建 PDO 并执行迁移
+            // 正常运行时 needsMigration() 为 false，此处完全不产生数据库连接
             $this->dbConfig = UserSystemMigrator::migrate($this->dbConfig, $this->databaseConfigPath);
         }
 

@@ -13,39 +13,48 @@ use GameFeedback\Support\Responder;
 final class Ticket extends AdminSubModule
 {
     /**
-     * @return array<string, array{methods: array<int, string>, allow_before_install?: bool}>
+     * @return array<string, array{
+     *   methods: array<int, string>,
+     *   allow_before_install?: bool,
+     *   auth?: string
+     * }>
      */
     protected function actionMeta(): array
     {
         return [
             'list' => [
-                'methods' => ['GET'],
+                self::META_METHODS => ['GET'],
+                self::META_AUTH => self::AUTH_ADMIN,
             ],
             'assignees' => [
-                'methods' => ['GET'],
+                self::META_METHODS => ['GET'],
+                self::META_AUTH => self::AUTH_ADMIN,
             ],
             'detail' => [
-                'methods' => ['GET'],
+                self::META_METHODS => ['GET'],
+                self::META_AUTH => self::AUTH_ADMIN,
             ],
             'attachmentDownload' => [
-                'methods' => ['GET'],
+                self::META_METHODS => ['GET'],
+                self::META_AUTH => self::AUTH_ADMIN,
             ],
             'update' => [
-                'methods' => ['POST'],
+                self::META_METHODS => ['POST'],
+                self::META_AUTH => self::AUTH_ADMIN,
             ],
             'assign' => [
-                'methods' => ['POST'],
+                self::META_METHODS => ['POST'],
+                self::META_AUTH => self::AUTH_ADMIN,
             ],
             'getOperations' => [
-                'methods' => ['GET'],
+                self::META_METHODS => ['GET'],
+                self::META_AUTH => self::AUTH_ADMIN,
             ],
         ];
     }
 
     protected function list(): void
     {
-        $this->ensureAdmin();
-
         $statusRaw = Request::query('status');
         $statusEnum = $statusRaw !== '' ? TicketStatus::tryFrom((int)$statusRaw) : null;
         $status = $statusEnum !== null ? $statusEnum : null;
@@ -77,8 +86,6 @@ final class Ticket extends AdminSubModule
 
     protected function detail(): void
     {
-        $this->ensureAdmin();
-
         $ticketNo = $this->sanitizer->sanitizeSingleLine(Request::query('ticketNo'), 32);
         if ($ticketNo === '' || !$this->sanitizer->isValidTicketNo($ticketNo)) {
             Responder::error('INVALID_TICKET_NO', '工单号格式不正确。', 422);
@@ -101,8 +108,6 @@ final class Ticket extends AdminSubModule
 
     protected function assignees(): void
     {
-        $this->ensureAdmin();
-
         Responder::send([
             'ok' => true,
             'users' => $this->createUserRepository()->listAssignableUsers(),
@@ -111,7 +116,7 @@ final class Ticket extends AdminSubModule
 
     protected function update(): void
     {
-        $currentUser = $this->ensureAdmin();
+        $currentUser = $this->currentAdminUser();
 
         $payload = Request::jsonBody();
         $ticketNo = $this->sanitizer->sanitizeSingleLine((string)($payload['ticketNo'] ?? ''), 32);
@@ -143,11 +148,10 @@ final class Ticket extends AdminSubModule
             $safeSeverity = $severity;
         }
 
-        $statusValue = $status;
         $updatedAt = date('Y-m-d H:i:s');
         $repo->updateTicket(
             $ticketNo,
-            $statusValue,
+            (int)$status,
             $safeSeverity,
             $adminNote !== '' ? $adminNote : null,
             $updatedAt
@@ -155,7 +159,7 @@ final class Ticket extends AdminSubModule
 
         // 记录状态变更
         $oldStatus = (int)($ticket['status'] ?? 0);
-        $newStatusValue = $statusValue instanceof TicketStatus ? $statusValue->value : (int)$statusValue;
+        $newStatusValue = (int)$status;
         if ($oldStatus !== $newStatusValue) {
             $repo->recordOperation(
                 $ticketNo,
@@ -175,8 +179,6 @@ final class Ticket extends AdminSubModule
 
     protected function attachmentDownload(): void
     {
-        $this->ensureAdmin();
-
         $ticketNo = $this->sanitizer->sanitizeSingleLine(Request::query('ticketNo'), 32);
         if ($ticketNo === '' || !$this->sanitizer->isValidTicketNo($ticketNo)) {
             Responder::error('INVALID_TICKET_NO', '工单号格式不正确。', 422);
@@ -197,8 +199,15 @@ final class Ticket extends AdminSubModule
         }
 
         if ($attachmentStorage === 'local') {
-            $absolutePath = dirname(__DIR__, 3) . '/storage/uploads/' . ltrim($attachmentKey, '/');
-            if (!is_file($absolutePath)) {
+            // 使用 realpath 校验最终路径必须在 uploads 目录内，防止路径穿越
+            $uploadsBasePath = realpath(dirname(__DIR__, 3) . '/storage/uploads');
+            $absolutePath = realpath(dirname(__DIR__, 3) . '/storage/uploads/' . ltrim($attachmentKey, '/'));
+            if (
+                $uploadsBasePath === false
+                || $absolutePath === false
+                || strncmp($absolutePath, $uploadsBasePath . DIRECTORY_SEPARATOR, strlen($uploadsBasePath) + 1) !== 0
+                || !is_file($absolutePath)
+            ) {
                 Responder::error('ATTACHMENT_NOT_FOUND', '附件文件不存在。', 404);
             }
 
@@ -219,7 +228,7 @@ final class Ticket extends AdminSubModule
                 Responder::error('QINIU_DOWNLOAD_FAILED', '当前环境未启用 cURL，无法下载七牛云附件。', 500);
             }
 
-            $content = null;
+            $downloadedStream = null;
             $lastHttpCode = 0;
             $lastCurlErrno = 0;
             $lastCurlError = '';
@@ -231,34 +240,47 @@ final class Ticket extends AdminSubModule
                     continue;
                 }
 
+                $bodyBuffer = fopen('php://temp', 'w+b');
+                if ($bodyBuffer === false) {
+                    curl_close($ch);
+                    Responder::error('QINIU_DOWNLOAD_FAILED', '无法初始化附件下载缓冲区。', 500);
+                }
+
                 $options = [
-                    CURLOPT_RETURNTRANSFER => true,
                     CURLOPT_FOLLOWLOCATION => true,
                     CURLOPT_TIMEOUT => 30,
+                    CURLOPT_HEADER => false,
+                    CURLOPT_RETURNTRANSFER => false,
+                    CURLOPT_FILE => $bodyBuffer,
                 ];
                 foreach ($this->buildCurlSslOptions() as $option => $value) {
                     $options[$option] = $value;
                 }
                 curl_setopt_array($ch, $options);
 
-                $response = curl_exec($ch);
+                $ok = curl_exec($ch);
                 $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
                 $curlErrno = curl_errno($ch);
                 $curlError = (string)curl_error($ch);
                 curl_close($ch);
 
-                if (is_string($response) && $curlErrno === 0 && $httpCode >= 200 && $httpCode < 300) {
-                    $content = $response;
+                rewind($bodyBuffer);
+                $responseSnippet = fread($bodyBuffer, 180);
+
+                if ($ok === true && $curlErrno === 0 && $httpCode >= 200 && $httpCode < 300) {
+                    rewind($bodyBuffer);
+                    $downloadedStream = $bodyBuffer;
                     break;
                 }
 
                 $lastHttpCode = $httpCode;
                 $lastCurlErrno = $curlErrno;
                 $lastCurlError = $curlError;
-                $lastBody = is_string($response) ? trim($response) : '';
+                $lastBody = is_string($responseSnippet) ? trim($responseSnippet) : '';
+                fclose($bodyBuffer);
             }
 
-            if (!is_string($content)) {
+            if (!is_resource($downloadedStream)) {
                 $message = '七牛云附件下载失败。';
                 if ($lastCurlErrno !== 0 && $lastCurlError !== '') {
                     $message .= ' cURL(' . $lastCurlErrno . '): ' . $lastCurlError;
@@ -273,10 +295,17 @@ final class Ticket extends AdminSubModule
                 Responder::error('QINIU_DOWNLOAD_FAILED', $message, 500);
             }
 
+            // 下载成功后再输出附件响应头，避免失败时污染错误 JSON 响应
             header('Content-Type: ' . $attachmentMime);
             header('Content-Disposition: attachment; filename="' . rawurlencode($attachmentName) . '"; filename*=UTF-8\'\'' . rawurlencode($attachmentName));
-            header('Content-Length: ' . (string)strlen($content));
-            echo $content;
+            $stat = fstat($downloadedStream);
+            if (is_array($stat) && isset($stat['size']) && (int)$stat['size'] > 0) {
+                header('Content-Length: ' . (string)((int)$stat['size']));
+            }
+            rewind($downloadedStream);
+            fpassthru($downloadedStream);
+            fclose($downloadedStream);
+
             exit;
         }
 
@@ -285,7 +314,7 @@ final class Ticket extends AdminSubModule
 
     protected function assign(): void
     {
-        $currentUser = $this->ensureAdmin();
+        $currentUser = $this->currentAdminUser();
 
         $payload = Request::jsonBody();
         $ticketNo = $this->sanitizer->sanitizeSingleLine((string)($payload['ticketNo'] ?? ''), 32);
@@ -355,8 +384,6 @@ final class Ticket extends AdminSubModule
 
     protected function getOperations(): void
     {
-        $this->ensureAdmin();
-
         $ticketNo = $this->sanitizer->sanitizeSingleLine(Request::query('ticketNo'), 32);
         if ($ticketNo === '' || !$this->sanitizer->isValidTicketNo($ticketNo)) {
             Responder::error('INVALID_TICKET_NO', '工单号格式不正确。', 422);

@@ -15,6 +15,52 @@ abstract class AdminSubModule extends BaseApiSubModule
     /** @var array<int, string>|null */
     private $qiniuDownloadDomains = null;
 
+    /** @var array<string, mixed>|null 当前动作已鉴权管理员缓存 */
+    private $authorizedUser = null;
+
+    /**
+     * 管理端动作统一前置处理
+     *
+     * 先执行基类的限流，再根据 actionMeta 的 auth 声明执行鉴权。
+     *
+     * @param array<string, mixed> $meta
+     * @return void
+     */
+    protected function beforeDispatch(string $functionName, array $meta): void
+    {
+        parent::beforeDispatch($functionName, $meta);
+
+        $auth = strtolower((string)($meta[self::META_AUTH] ?? self::AUTH_NONE));
+        if ($auth === self::AUTH_ADMIN) {
+            $this->authorizedUser = $this->ensureAdmin();
+            return;
+        }
+
+        if ($auth === self::AUTH_SUPER_ADMIN) {
+            $this->authorizedUser = $this->ensureSuperAdmin();
+            return;
+        }
+
+        $this->authorizedUser = null;
+    }
+
+    /**
+     * 获取当前动作已鉴权管理员信息
+     *
+     * 若当前动作未声明 auth=admin/super_admin，则会兜底触发 ensureAdmin。
+     *
+     * @return array<string, mixed>
+     */
+    protected function currentAdminUser(): array
+    {
+        if (is_array($this->authorizedUser)) {
+            return $this->authorizedUser;
+        }
+
+        $this->authorizedUser = $this->ensureAdmin();
+        return $this->authorizedUser;
+    }
+
     /**
      * @return array<string, mixed>
      */

@@ -12,27 +12,15 @@ function createDefaultUpdateForm(): AdminUpdateForm {
 }
 
 function readStoredToken(): string {
-  const sessionToken = window.sessionStorage.getItem(TOKEN_STORAGE_KEY)
-  if (sessionToken) {
-    return sessionToken
-  }
-
-  const legacyToken = window.localStorage.getItem(TOKEN_STORAGE_KEY)
-  if (legacyToken) {
-    window.localStorage.removeItem(TOKEN_STORAGE_KEY)
-  }
-
-  return ''
+  return window.sessionStorage.getItem(TOKEN_STORAGE_KEY) || ''
 }
 
 function writeStoredToken(token: string): void {
   window.sessionStorage.setItem(TOKEN_STORAGE_KEY, token)
-  window.localStorage.removeItem(TOKEN_STORAGE_KEY)
 }
 
 function clearStoredToken(): void {
   window.sessionStorage.removeItem(TOKEN_STORAGE_KEY)
-  window.localStorage.removeItem(TOKEN_STORAGE_KEY)
 }
 
 export const useAdminStore = defineStore('admin', () => {

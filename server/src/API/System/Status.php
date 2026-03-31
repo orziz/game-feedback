@@ -8,6 +8,9 @@ use GameFeedback\API\BaseApiSubModule;
 use GameFeedback\Support\Responder;
 
 
+/**
+ * 系统状态接口：提供健康检查与安装状态查询。
+ */
 final class Status extends BaseApiSubModule
 {
     /**
@@ -17,18 +20,19 @@ final class Status extends BaseApiSubModule
     {
         return [
             'health' => [
-                'methods' => ['GET'],
-                'allow_before_install' => true,
+                self::META_METHODS => ['GET'],
+                self::META_ALLOW_BEFORE_INSTALL => true,
             ],
             'installStatus' => [
-                'methods' => ['GET'],
-                'allow_before_install' => true,
+                self::META_METHODS => ['GET'],
+                self::META_ALLOW_BEFORE_INSTALL => true,
             ],
         ];
     }
 
     protected function health(): void
     {
+        // 健康检查：用于探活与基础连通性验证
         Responder::send([
             'ok' => true,
             'installed' => $this->installed,
@@ -38,6 +42,7 @@ final class Status extends BaseApiSubModule
 
     protected function installStatus(): void
     {
+        // 安装状态：返回前端初始化面板需要的核心配置摘要
         $uploadMaxBytes = (int)($this->dbConfig['upload_max_bytes'] ?? 5 * 1024 * 1024);
         if ($uploadMaxBytes <= 0) {
             $uploadMaxBytes = 5 * 1024 * 1024;

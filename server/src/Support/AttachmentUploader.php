@@ -6,6 +6,9 @@ namespace GameFeedback\Support;
 
 use CURLFile;
 
+/**
+ * 附件上传服务：统一处理本地与七牛云两种存储策略。
+ */
 final class AttachmentUploader
 {
     /** @var array<string, mixed> */
@@ -25,6 +28,7 @@ final class AttachmentUploader
      */
     public function handleUpload(?array $file): array
     {
+        // 上传模式由配置驱动：off / local / qiniu
         $mode = (string)($this->dbConfig['upload_mode'] ?? 'off');
         if (!in_array($mode, ['off', 'local', 'qiniu'], true)) {
             $mode = 'off';
@@ -95,6 +99,7 @@ final class AttachmentUploader
                 : ($extension === 'zip' ? 'application/zip' : 'image/jpeg'));
 
         if ($mode === 'local') {
+            // 本地存储：按年月目录归档
             $stored = $this->storeLocalAttachment($tmpName, $extension);
             return [
                 'name' => $originalName,
@@ -106,6 +111,7 @@ final class AttachmentUploader
         }
 
         if ($mode === 'qiniu') {
+            // 云存储：上传成功后仅返回对象 key，由下载接口换取最终文件
             $stored = $this->storeQiniuAttachment($tmpName, $extension, $mime);
             return [
                 'name' => $originalName,
@@ -177,6 +183,7 @@ final class AttachmentUploader
                     $lastError = (string)$result['response'];
                 }
 
+                // bad token 允许切换 scope 重试；其他错误直接进入下一 host
                 if (strpos($lastError, 'bad token') === false) {
                     break;
                 }

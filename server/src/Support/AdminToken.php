@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace GameFeedback\Support;
 
+/**
+ * 管理员登录令牌工具：负责创建与校验后台访问令牌。
+ */
 final class AdminToken
 {
     private const TTL = 12 * 3600;
 
     public static function create(int $userId, string $passwordHash, string $appSecret): string
     {
+        // 令牌载荷包含用户ID、签发时间、随机串、密码标记，再用 appSecret 进行 HMAC 签名
         $timestamp = time();
         $nonce = bin2hex(random_bytes(8));
         $passwordMarker = self::buildPasswordMarker($passwordHash, $appSecret);
@@ -24,6 +28,7 @@ final class AdminToken
      */
     public static function verify(string $token, string $appSecret)
     {
+        // 先做格式与签名校验，再做过期校验，最后返回可用于鉴权的关键信息
         if ($token === '' || $appSecret === '') {
             return false;
         }
@@ -73,6 +78,7 @@ final class AdminToken
 
     public static function buildPasswordMarker(string $passwordHash, string $appSecret): string
     {
+        // 密码标记用于密码变更后使旧令牌失效
         return hash_hmac('sha256', $passwordHash, $appSecret);
     }
 }

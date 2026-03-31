@@ -4,15 +4,14 @@ declare(strict_types=1);
 
 namespace GameFeedback\Repository;
 
-use GameFeedback\Support\Responder;
 use PDO;
 use Throwable;
-
 
 /**
  * 工单数据库仓储类
  *
- * 封装 feedback_tickets 表的全部 CRUD 操作及表结构迁移
+ * 封装 feedback_tickets 与 ticket_operations 表的全部 CRUD 操作。
+ * 表结构迁移逻辑已迁移至 SchemaMigrationManager，本类只负责数据访问。
  */
 final class TicketRepository
 {
@@ -28,7 +27,9 @@ final class TicketRepository
     }
 
     /**
-     * 创建当前版本所需的基础表结构
+     * 创建基础表结构（幂等，使用 CREATE TABLE IF NOT EXISTS）
+     *
+     * 包含 feedback_tickets（含 content_hash 列）和 ticket_operations 两张表。
      *
      * @return void
      */
@@ -51,11 +52,13 @@ CREATE TABLE IF NOT EXISTS feedback_tickets (
     assigned_to BIGINT UNSIGNED NULL,
     status TINYINT UNSIGNED NOT NULL DEFAULT 0,
     admin_note TEXT NULL,
+    content_hash CHAR(32) NULL,
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL,
     INDEX idx_type_title (type, title),
     INDEX idx_status_created (status, created_at),
-    INDEX idx_assigned_to (assigned_to)
+    INDEX idx_assigned_to (assigned_to),
+    INDEX idx_content_hash (content_hash)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 SQL;
 
@@ -78,314 +81,33 @@ SQL;
     }
 
     /**
-     * 迁移旧版 ENUM 类型字段到整数列
+     * 计算工单内容哈希，用于重复提交检测
      *
-     * @return void
-     */
-    public function migrateLegacyEnumColumns(): void
-    {
-        $this->migrateLegacyEnumColumnsIfNeeded();
-    }
-
-    /**
-     * 补齐附件相关字段
+     * 对 type、title、details 做标准化（trim + 折叠空白 + 小写）后取 MD5，
+     * 防止仅通过大小写或多余空格绕过重复检测。
      *
-     * @return void
+     * @param int    $type    反馈类型
+     * @param string $title   标题
+     * @param string $details 详情
+     * @return string 32 位十六进制 MD5
      */
-    public function migrateAttachmentColumns(): void
+    public static function computeContentHash(int $type, string $title, string $details): string
     {
-        $this->ensureAttachmentColumns();
-    }
-
-    /**
-     * 补齐指派字段和索引
-     *
-     * @return void
-     */
-    public function migrateAssignmentSupport(): void
-    {
-        $this->ensureAssignedToColumn();
-    }
-
-    /**
-     * 补齐工单操作记录表
-     *
-     * @return void
-     */
-    public function migrateTicketOperationsSupport(): void
-    {
-        $this->ensureTicketOperationsTable();
-    }
-
-    /**
-     * 将旧版 ENUM 类型字段迁移为 TINYINT 整数字段
-     *
-     * @return void
-     */
-    private function migrateLegacyEnumColumnsIfNeeded(): void
-    {
-        $stmt = $this->pdo->query("SHOW COLUMNS FROM feedback_tickets LIKE 'status'");
-        $statusCol = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
-        if (!$statusCol || strpos(strtolower((string)($statusCol['Type'] ?? '')), 'enum') !== 0) {
-            return;
-        }
-
-        $this->pdo->exec(
-            'ALTER TABLE feedback_tickets ' .
-            'ADD COLUMN type_num TINYINT UNSIGNED NOT NULL DEFAULT 3, ' .
-            'ADD COLUMN severity_num TINYINT UNSIGNED NULL, ' .
-            'ADD COLUMN status_num TINYINT UNSIGNED NOT NULL DEFAULT 0'
+        $normalizedTitle = mb_strtolower(
+            trim((string)(preg_replace('/\s+/u', ' ', $title) ?? '')),
+            'UTF-8'
         );
-
-        $this->pdo->exec("UPDATE feedback_tickets SET type_num = CASE type WHEN 'BUG' THEN 0 WHEN '优化' THEN 1 WHEN '建议' THEN 2 ELSE 3 END");
-        $this->pdo->exec("UPDATE feedback_tickets SET severity_num = CASE severity WHEN '低' THEN 0 WHEN '中' THEN 1 WHEN '高' THEN 2 WHEN '致命' THEN 3 ELSE NULL END");
-        $this->pdo->exec("UPDATE feedback_tickets SET status_num = CASE status WHEN '待处理' THEN 0 WHEN '处理中' THEN 1 WHEN '已解决' THEN 2 WHEN '已关闭' THEN 3 ELSE 0 END");
-
-        $this->pdo->exec('ALTER TABLE feedback_tickets DROP COLUMN type, DROP COLUMN severity, DROP COLUMN status');
-        $this->pdo->exec(
-            'ALTER TABLE feedback_tickets ' .
-            'CHANGE COLUMN type_num type TINYINT UNSIGNED NOT NULL, ' .
-            'CHANGE COLUMN severity_num severity TINYINT UNSIGNED NULL, ' .
-            'CHANGE COLUMN status_num status TINYINT UNSIGNED NOT NULL DEFAULT 0'
+        $normalizedDetails = mb_strtolower(
+            trim((string)(preg_replace('/\s+/u', ' ', $details) ?? '')),
+            'UTF-8'
         );
+        return md5((string)$type . '|' . $normalizedTitle . '|' . $normalizedDetails);
     }
 
     /**
-     * 确保附件相关字段存在，不存在则自动添加
+     * 查找相同内容哈希的重复工单
      *
-     * @return void
-     */
-    private function ensureAttachmentColumns(): void
-    {
-        $attachmentColumns = [
-            'attachment_name',
-            'attachment_storage',
-            'attachment_key',
-            'attachment_mime',
-            'attachment_size',
-        ];
-
-        $missingColumns = [];
-        foreach ($attachmentColumns as $col) {
-            if (!$this->columnExists($col)) {
-                $missingColumns[] = $col;
-            }
-        }
-
-        if (empty($missingColumns)) {
-            return;
-        }
-
-        try {
-            $columnDefs = [];
-            foreach ($missingColumns as $col) {
-                if ($col === 'attachment_name') {
-                    $columnDefs[] = 'ADD COLUMN attachment_name VARCHAR(255) NULL';
-                } elseif ($col === 'attachment_storage') {
-                    $columnDefs[] = 'ADD COLUMN attachment_storage VARCHAR(16) NULL';
-                } elseif ($col === 'attachment_key') {
-                    $columnDefs[] = 'ADD COLUMN attachment_key VARCHAR(255) NULL';
-                } elseif ($col === 'attachment_mime') {
-                    $columnDefs[] = 'ADD COLUMN attachment_mime VARCHAR(80) NULL';
-                } elseif ($col === 'attachment_size') {
-                    $columnDefs[] = 'ADD COLUMN attachment_size INT UNSIGNED NULL';
-                }
-            }
-
-            if (!empty($columnDefs)) {
-                $this->pdo->exec('ALTER TABLE feedback_tickets ' . implode(', ', $columnDefs));
-            }
-        } catch (Throwable $e) {
-            Responder::error('TABLE_MIGRATION_FAILED', '表结构升级失败：' . $e->getMessage(), 500);
-        }
-    }
-
-    /**
-     * 确保 assigned_to 字段和索引存在，不存在则自动添加
-     *
-     * @return void
-     */
-    private function ensureAssignedToColumn(): void
-    {
-        if ($this->columnExists('assigned_to')) {
-            if (!$this->indexExists('idx_assigned_to')) {
-                $this->pdo->exec('ALTER TABLE feedback_tickets ADD INDEX idx_assigned_to (assigned_to)');
-            }
-
-            return;
-        }
-
-        try {
-            $this->pdo->exec(
-                'ALTER TABLE feedback_tickets ' .
-                'ADD COLUMN assigned_to BIGINT UNSIGNED NULL, ' .
-                'ADD INDEX idx_assigned_to (assigned_to)'
-            );
-        } catch (Throwable $e) {
-            Responder::error('TABLE_MIGRATION_FAILED', '表结构升级失败：' . $e->getMessage(), 500);
-        }
-    }
-
-    /**
-     * 确保 ticket_operations 表存在，不存在则自动创建
-     *
-     * @return void
-     */
-    private function ensureTicketOperationsTable(): void
-    {
-        try {
-            if (!$this->tableExists('ticket_operations')) {
-                $this->pdo->exec(
-                    'CREATE TABLE IF NOT EXISTS ticket_operations (' .
-                    'id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, ' .
-                    'ticket_no VARCHAR(32) NOT NULL, ' .
-                    'operator_id BIGINT UNSIGNED NOT NULL, ' .
-                    'operator_username VARCHAR(64) NOT NULL, ' .
-                    'operation_type VARCHAR(32) NOT NULL, ' .
-                    'old_value VARCHAR(255) NULL, ' .
-                    'new_value VARCHAR(255) NOT NULL, ' .
-                    'created_at DATETIME NOT NULL, ' .
-                    'INDEX idx_ticket_no (ticket_no), ' .
-                    'INDEX idx_operator_id (operator_id), ' .
-                    'INDEX idx_created_at (created_at)' .
-                    ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
-                );
-                return;
-            }
-
-            $alterClauses = [];
-            if (!$this->operationColumnExists('operator_id')) {
-                $alterClauses[] = 'ADD COLUMN operator_id BIGINT UNSIGNED NOT NULL DEFAULT 0';
-            }
-            if (!$this->operationColumnExists('operator_username')) {
-                $alterClauses[] = 'ADD COLUMN operator_username VARCHAR(64) NOT NULL DEFAULT \'\'';
-            }
-            if (!$this->operationColumnExists('operation_type')) {
-                $alterClauses[] = 'ADD COLUMN operation_type VARCHAR(32) NOT NULL DEFAULT \'assign\'';
-            }
-            if (!$this->operationColumnExists('old_value')) {
-                $alterClauses[] = 'ADD COLUMN old_value VARCHAR(255) NULL';
-            }
-            if (!$this->operationColumnExists('new_value')) {
-                $alterClauses[] = 'ADD COLUMN new_value VARCHAR(255) NOT NULL DEFAULT \'\'';
-            }
-            if (!$this->operationColumnExists('created_at')) {
-                $alterClauses[] = 'ADD COLUMN created_at DATETIME NOT NULL';
-            }
-
-            if (!empty($alterClauses)) {
-                $this->pdo->exec('ALTER TABLE ticket_operations ' . implode(', ', $alterClauses));
-            }
-
-            if (!$this->operationIndexExists('idx_ticket_no')) {
-                $this->pdo->exec('ALTER TABLE ticket_operations ADD INDEX idx_ticket_no (ticket_no)');
-            }
-            if (!$this->operationIndexExists('idx_operator_id')) {
-                $this->pdo->exec('ALTER TABLE ticket_operations ADD INDEX idx_operator_id (operator_id)');
-            }
-            if (!$this->operationIndexExists('idx_created_at')) {
-                $this->pdo->exec('ALTER TABLE ticket_operations ADD INDEX idx_created_at (created_at)');
-            }
-        } catch (Throwable $e) {
-            Responder::error('TABLE_MIGRATION_FAILED', '表结构升级失败：' . $e->getMessage(), 500);
-        }
-    }
-
-    /**
-     * 检查指定列是否存在于 feedback_tickets 表
-     *
-     * @param string $column 列名
-     * @return bool
-     */
-    private function columnExists(string $column): bool
-    {
-        $stmt = $this->pdo->prepare(
-            'SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND COLUMN_NAME = :column_name LIMIT 1'
-        );
-        $stmt->execute([
-            ':table_name' => 'feedback_tickets',
-            ':column_name' => $column,
-        ]);
-        return $stmt->fetch(PDO::FETCH_ASSOC) !== false;
-    }
-
-    /**
-     * 检查指定索引是否存在于 feedback_tickets 表
-     *
-     * @param string $index 索引名
-     * @return bool
-     */
-    private function indexExists(string $index): bool
-    {
-        $stmt = $this->pdo->prepare(
-            'SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND INDEX_NAME = :index_name LIMIT 1'
-        );
-        $stmt->execute([
-            ':table_name' => 'feedback_tickets',
-            ':index_name' => $index,
-        ]);
-
-        return $stmt->fetch(PDO::FETCH_ASSOC) !== false;
-    }
-
-    /**
-     * 检查指定表是否存在
-     *
-     * @param string $table 表名
-     * @return bool
-     */
-    private function tableExists(string $table): bool
-    {
-        $stmt = $this->pdo->prepare(
-            'SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name LIMIT 1'
-        );
-        $stmt->execute([
-            ':table_name' => $table,
-        ]);
-
-        return $stmt->fetch(PDO::FETCH_ASSOC) !== false;
-    }
-
-    /**
-     * 检查指定列是否存在于 ticket_operations 表
-     *
-     * @param string $column 列名
-     * @return bool
-     */
-    private function operationColumnExists(string $column): bool
-    {
-        $stmt = $this->pdo->prepare(
-            'SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND COLUMN_NAME = :column_name LIMIT 1'
-        );
-        $stmt->execute([
-            ':table_name' => 'ticket_operations',
-            ':column_name' => $column,
-        ]);
-
-        return $stmt->fetch(PDO::FETCH_ASSOC) !== false;
-    }
-
-    /**
-     * 检查指定索引是否存在于 ticket_operations 表
-     *
-     * @param string $index 索引名
-     * @return bool
-     */
-    private function operationIndexExists(string $index): bool
-    {
-        $stmt = $this->pdo->prepare(
-            'SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND INDEX_NAME = :index_name LIMIT 1'
-        );
-        $stmt->execute([
-            ':table_name' => 'ticket_operations',
-            ':index_name' => $index,
-        ]);
-
-        return $stmt->fetch(PDO::FETCH_ASSOC) !== false;
-    }
-
-    /**
-     * 查找相同类型、标题、详情的重复工单
+     * 使用 computeContentHash 对输入做标准化后比对，防止大小写或多余空白绕过查重。
      *
      * @param int    $type    反馈类型
      * @param string $title   标题
@@ -394,24 +116,30 @@ SQL;
      */
     public function findDuplicateTicketNo(int $type, string $title, string $details)
     {
-        $stmt = $this->pdo->prepare('SELECT ticket_no FROM feedback_tickets WHERE type = :type AND title = :title AND details = :details LIMIT 1');
-        $stmt->execute([
-            ':type' => $type,
-            ':title' => $title,
-            ':details' => $details,
-        ]);
-
+        $hash = self::computeContentHash($type, $title, $details);
+        $stmt = $this->pdo->prepare(
+            'SELECT ticket_no FROM feedback_tickets WHERE content_hash = :content_hash LIMIT 1'
+        );
+        $stmt->execute([':content_hash' => $hash]);
         return $stmt->fetchColumn();
     }
 
     /**
-     * 生成唯一工单号，格式为 FB{YYYYMMDD}{6位十六进制}
+     * 生成唯一工单号，格式为 FB{YYYYMMDD}{6位十六进制大写}
      *
+     * 最多重试 20 次，超限则抛出 RuntimeException。
+     *
+     * @throws \RuntimeException 当无法在 20 次内生成唯一工单号时
      * @return string 新工单号
      */
     public function generateTicketNo(): string
     {
+        $maxAttempts = 20;
+        $attempts = 0;
         do {
+            if (++$attempts > $maxAttempts) {
+                throw new \RuntimeException('无法在 ' . $maxAttempts . ' 次内生成唯一工单号，请稍后重试。');
+            }
             $candidate = 'FB' . date('Ymd') . strtoupper(bin2hex(random_bytes(3)));
             $stmt = $this->pdo->prepare('SELECT id FROM feedback_tickets WHERE ticket_no = :ticket_no LIMIT 1');
             $stmt->execute([':ticket_no' => $candidate]);
@@ -424,47 +152,58 @@ SQL;
     /**
      * 插入一条工单记录
      *
-     * @param array<string, mixed> $ticket 绑定参数数组
+     * 会自动根据 type/title/details 计算并写入 content_hash，无需调用方手动传入。
+     *
+     * @param array<string, mixed> $ticket 绑定参数数组（不含 :content_hash，方法内自动计算）
      * @return void
      */
     public function insertTicket(array $ticket): void
     {
-        $stmt = $this->pdo->prepare('INSERT INTO feedback_tickets (ticket_no, type, severity, title, details, contact, attachment_name, attachment_storage, attachment_key, attachment_mime, attachment_size, status, admin_note, created_at, updated_at) VALUES (:ticket_no, :type, :severity, :title, :details, :contact, :attachment_name, :attachment_storage, :attachment_key, :attachment_mime, :attachment_size, :status, :admin_note, :created_at, :updated_at)');
+        // 自动计算内容哈希，用于重复提交检测（防止大小写/空白绕过）
+        $ticket[':content_hash'] = self::computeContentHash(
+            (int)($ticket[':type'] ?? 0),
+            (string)($ticket[':title'] ?? ''),
+            (string)($ticket[':details'] ?? '')
+        );
+
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO feedback_tickets ' .
+            '(ticket_no, type, severity, title, details, contact, ' .
+            'attachment_name, attachment_storage, attachment_key, attachment_mime, attachment_size, ' .
+            'status, admin_note, content_hash, created_at, updated_at) ' .
+            'VALUES (:ticket_no, :type, :severity, :title, :details, :contact, ' .
+            ':attachment_name, :attachment_storage, :attachment_key, :attachment_mime, :attachment_size, ' .
+            ':status, :admin_note, :content_hash, :created_at, :updated_at)'
+        );
         $stmt->execute($ticket);
     }
 
     /**
-     * 根据工单号查询单条工单
+     * 根据工单号查询单条工单（含全部字段）
      *
      * @param string $ticketNo 工单号
      * @return array<string, mixed>|false 工单记录或 false
      */
     public function findTicketByNo(string $ticketNo)
     {
-        $stmt = $this->pdo->prepare('SELECT ticket_no, type, severity, title, details, contact, attachment_name, attachment_storage, attachment_key, attachment_mime, attachment_size, status, admin_note, assigned_to, created_at, updated_at FROM feedback_tickets WHERE ticket_no = :ticket_no LIMIT 1');
+        $stmt = $this->pdo->prepare(
+            'SELECT ticket_no, type, severity, title, details, contact, ' .
+            'attachment_name, attachment_storage, attachment_key, attachment_mime, attachment_size, ' .
+            'status, admin_note, assigned_to, created_at, updated_at ' .
+            'FROM feedback_tickets WHERE ticket_no = :ticket_no LIMIT 1'
+        );
         $stmt->execute([':ticket_no' => $ticketNo]);
-
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
     /**
      * 管理员工单列表查询（支持筛选 + 分页）
      *
-     * @param int|null $status   状态筛选
-     * @param int|null $type     类型筛选
-     * @param string   $keyword  标题/内容关键词
-     * @param int      $page     页码
-     * @param int      $pageSize 每页条数
-     * @return array{total: int, items: array<int, array<string, mixed>>}
-     */
-    /**
-     * 管理员工单列表查询（支持筛选 + 分页）
-     *
-     * @param int|null $status      状态筛选
-     * @param int|null $type        类型筛选
-     * @param string   $keyword     标题/内容关键词
-     * @param int|null $assignedTo  指派给用户的ID筛选
-     * @param int      $page        页码
+     * @param int|null $status      状态筛选（null 表示不筛选）
+     * @param int|null $type        类型筛选（null 表示不筛选）
+     * @param string   $keyword     标题/内容关键词（空字符串表示不筛选）
+     * @param int|null $assignedTo  指派用户 ID 筛选（null 表示不筛选）
+     * @param int      $page        页码（从 1 开始）
      * @param int      $pageSize    每页条数
      * @return array{total: int, items: array<int, array<string, mixed>>}
      */
@@ -507,7 +246,7 @@ SQL;
         }
         $stmt->bindValue(':limit', $pageSize, PDO::PARAM_INT);
         $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-            $stmt->execute();
+        $stmt->execute();
 
         return [
             'total' => $total,
@@ -516,10 +255,12 @@ SQL;
     }
 
     /**
-     * 公共工单模糊搜索（玩家问题搜索）
+     * 公共工单模糊搜索（供玩家查询问题进度或解决方案）
+     *
+     * admin_note 也纳入搜索范围，因为管理员会将解决方案写在备注中供玩家参考。
      *
      * @param string $keyword  搜索关键词
-     * @param int    $page     页码
+     * @param int    $page     页码（从 1 开始）
      * @param int    $pageSize 每页条数
      * @return array{total: int, items: array<int, array<string, mixed>>}
      */
@@ -573,16 +314,18 @@ SQL;
     /**
      * 更新工单状态、严重程度、管理员备注
      *
-     * @param string   $ticketNo  工单号
-     * @param int      $status    新状态
-     * @param int|null $severity  新严重程度（非 BUG 工单传 null）
-     * @param string|null $adminNote 管理员备注
-     * @param string   $updatedAt 更新时间
+     * @param string      $ticketNo  工单号
+     * @param int         $status    新状态（TicketStatus 常量值）
+     * @param int|null    $severity  新严重程度（非 BUG 工单传 null）
+     * @param string|null $adminNote 管理员备注（空则传 null）
+     * @param string      $updatedAt 更新时间（Y-m-d H:i:s 格式）
      * @return void
      */
     public function updateTicket(string $ticketNo, int $status, ?int $severity, ?string $adminNote, string $updatedAt): void
     {
-        $stmt = $this->pdo->prepare('UPDATE feedback_tickets SET status = :status, severity = :severity, admin_note = :admin_note, updated_at = :updated_at WHERE ticket_no = :ticket_no');
+        $stmt = $this->pdo->prepare(
+            'UPDATE feedback_tickets SET status = :status, severity = :severity, admin_note = :admin_note, updated_at = :updated_at WHERE ticket_no = :ticket_no'
+        );
         $stmt->execute([
             ':status' => $status,
             ':severity' => $severity,
@@ -595,14 +338,16 @@ SQL;
     /**
      * 指派工单给管理员用户
      *
-     * @param string     $ticketNo   工单号
-     * @param int|null   $assignedTo 分配给的用户 ID（null 表示取消指派）
-     * @param string     $updatedAt  更新时间
+     * @param string   $ticketNo   工单号
+     * @param int|null $assignedTo 分配给的用户 ID（null 表示取消指派）
+     * @param string   $updatedAt  更新时间（Y-m-d H:i:s 格式）
      * @return void
      */
     public function assignTicket(string $ticketNo, ?int $assignedTo, string $updatedAt): void
     {
-        $stmt = $this->pdo->prepare('UPDATE feedback_tickets SET assigned_to = :assigned_to, updated_at = :updated_at WHERE ticket_no = :ticket_no');
+        $stmt = $this->pdo->prepare(
+            'UPDATE feedback_tickets SET assigned_to = :assigned_to, updated_at = :updated_at WHERE ticket_no = :ticket_no'
+        );
         $stmt->execute([
             ':assigned_to' => $assignedTo,
             ':updated_at' => $updatedAt,
@@ -611,24 +356,22 @@ SQL;
     }
 
     /**
-     * 记录工单操作
+     * 记录工单操作日志到 ticket_operations 表
      *
-     * @param string $ticketNo     工单号
-     * @param int    $operatorId   操作人ID
-     * @param string $operatorName 操作人名称
-     * @param string $operationType 操作类型（status_change, assign）
-     * @param string|null $oldValue 旧值
-     * @param string $newValue     新值
+     * @param string      $ticketNo      工单号
+     * @param int         $operatorId    操作人 ID
+     * @param string      $operatorName  操作人用户名
+     * @param string      $operationType 操作类型（status_change / assign）
+     * @param string|null $oldValue      旧值（null 表示无旧值）
+     * @param string      $newValue      新值
      * @return void
      */
     public function recordOperation(string $ticketNo, int $operatorId, string $operatorName, string $operationType, ?string $oldValue, string $newValue): void
     {
         try {
-            // 确保表存在
-            $this->ensureTicketOperationsTable();
-            
             $stmt = $this->pdo->prepare(
-                'INSERT INTO ticket_operations (ticket_no, operator_id, operator_username, operation_type, old_value, new_value, created_at) ' .
+                'INSERT INTO ticket_operations ' .
+                '(ticket_no, operator_id, operator_username, operation_type, old_value, new_value, created_at) ' .
                 'VALUES (:ticket_no, :operator_id, :operator_username, :operation_type, :old_value, :new_value, :created_at)'
             );
             $result = $stmt->execute([
@@ -641,16 +384,15 @@ SQL;
                 ':created_at' => date('Y-m-d H:i:s'),
             ]);
             if (!$result) {
-                $error = $stmt->errorInfo();
-                error_log('Failed to record operation for ticket ' . $ticketNo . ': ' . json_encode($error));
+                error_log('Failed to record operation for ticket ' . $ticketNo . ': ' . json_encode($stmt->errorInfo()));
             }
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             error_log('Exception recording operation for ticket ' . $ticketNo . ': ' . $e->getMessage());
         }
     }
 
     /**
-     * 获取工单的操作记录
+     * 获取工单的操作记录列表（按时间倒序）
      *
      * @param string $ticketNo 工单号
      * @return array<int, array<string, mixed>> 操作记录列表
