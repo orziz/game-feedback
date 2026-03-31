@@ -2,26 +2,31 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
-import { useAppStore } from '../../stores/app'
+import { useAppStore } from '@/stores/app'
+import { useAdminStore } from '@/stores/admin'
 
 const props = defineProps<{
-  statusFilter: TicketStatus | null
-  typeFilter:   FeedbackType | null
-  keyword:      string
-  loading:      boolean
-  compact?:     boolean
+  statusFilter:  TicketStatus | null
+  typeFilter:    FeedbackType | null
+  assignedFilter: number | null
+  keyword:       string
+  loading:       boolean
+  compact?:      boolean
 }>()
 
 const emit = defineEmits<{
-  'update:statusFilter': [value: TicketStatus | null]
-  'update:typeFilter':   [value: FeedbackType | null]
-  'update:keyword':      [value: string]
+  'update:statusFilter':  [value: TicketStatus | null]
+  'update:typeFilter':    [value: FeedbackType | null]
+  'update:assignedFilter': [value: number | null]
+  'update:keyword':       [value: string]
   refresh: []
 }>()
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const adminStore = useAdminStore()
 const { statusOptions, typeOptions } = storeToRefs(appStore)
+const { users } = storeToRefs(adminStore)
 
 const statusModel = computed({
   get: () => props.statusFilter,
@@ -31,6 +36,11 @@ const statusModel = computed({
 const typeModel = computed({
   get: () => props.typeFilter,
   set: (v) => emit('update:typeFilter', v === undefined || v === '' as any ? null : v),
+})
+
+const assignedModel = computed({
+  get: () => props.assignedFilter,
+  set: (v) => emit('update:assignedFilter', v === undefined || v === null ? null : v),
 })
 
 const keywordModel = computed({
@@ -79,6 +89,20 @@ const keywordModel = computed({
           :key="ft.value"
           :label="ft.label"
           :value="ft.value"
+        />
+      </el-select>
+
+      <el-select
+        v-model="assignedModel"
+        :placeholder="t('admin.assignedFilterPlaceholder')"
+        clearable
+        @change="emit('refresh')"
+      >
+        <el-option
+          v-for="u in users"
+          :key="u.id"
+          :label="u.username"
+          :value="u.id"
         />
       </el-select>
 

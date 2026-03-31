@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { useAdminStore } from '../stores/admin'
-import AdminFiltersBar from './admin/AdminFiltersBar.vue'
-import AdminTicketTable from './admin/AdminTicketTable.vue'
-import AdminTicketDetail from './admin/AdminTicketDetail.vue'
-import AdminUserManagement from './admin/AdminUserManagement.vue'
+import { useAdminStore } from '@/stores/admin'
+import AdminFiltersBar from '@/components/admin/AdminFiltersBar.vue'
+import AdminTicketTable from '@/components/admin/AdminTicketTable.vue'
+import AdminTicketDetail from '@/components/admin/AdminTicketDetail.vue'
+import AdminUserManagement from '@/components/admin/AdminUserManagement.vue'
 
 const { t } = useI18n()
 const adminStore = useAdminStore()
@@ -14,6 +14,7 @@ const {
   loading,
   statusFilter,
   typeFilter,
+  assignedFilter,
   keyword,
   tickets,
   page,
@@ -28,6 +29,11 @@ const {
 
 const detailVisible = ref(false)
 const adminTab = ref('tickets')
+
+onMounted(() => {
+  // 加载用户列表用于指派
+  adminStore.loadUsers()
+})
 
 async function handleSelectTicket(ticketNo: string): Promise<void> {
   detailVisible.value = true
@@ -52,6 +58,7 @@ async function handleSelectTicket(ticketNo: string): Promise<void> {
             <AdminFiltersBar
               v-model:status-filter="statusFilter"
               v-model:type-filter="typeFilter"
+              v-model:assigned-filter="assignedFilter"
               v-model:keyword="keyword"
               :loading="loading"
               compact

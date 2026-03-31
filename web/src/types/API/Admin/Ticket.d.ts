@@ -3,12 +3,14 @@ declare namespace API.Admin.Ticket {
     get: {
       list: API.Meta.Get<HttpParams.List, AdminListResponse>
       detail: API.Meta.Get<HttpParams.Detail, AdminDetailResponse>
+      getOperations: API.Meta.Get<HttpParams.GetOperations, AdminOperationsResponse>
     }
     getBlob: {
       attachmentDownload: API.Meta.GetBlob<HttpParams.AttachmentDownload>
     }
     post: {
       update: API.Meta.Post<HttpParams.Update, ApiResponseBase>
+      assign: API.Meta.Post<HttpParams.Assign, ApiResponseBase>
     }
   }
 
@@ -19,6 +21,7 @@ declare namespace API.Admin.Ticket {
       status?: TicketStatus
       type?: FeedbackType
       keyword?: string
+      assignedTo?: number
     }
 
     interface Detail {
@@ -35,6 +38,15 @@ declare namespace API.Admin.Ticket {
       severity: Severity | null
       adminNote: string
     }
+
+    interface Assign {
+      ticketNo: string
+      assignedTo: number | null
+    }
+
+    interface GetOperations {
+      ticketNo: string
+    }
   }
 }
 
@@ -47,6 +59,7 @@ interface TicketRecord {
   contact: string
   status: TicketStatus
   admin_note: string
+  assigned_to?: number | null
   attachment_name?: string | null
   attachment_storage?: string | null
   attachment_mime?: string | null
@@ -55,10 +68,21 @@ interface TicketRecord {
   updated_at: string
 }
 
+interface TicketOperation {
+  id: number
+  operator_id: number
+  operator_username: string
+  operation_type: 'status_change' | 'assign'
+  old_value: string | null
+  new_value: string
+  created_at: string
+}
+
 interface AdminUpdateForm {
   status: TicketStatus
   severity: Severity | null
   adminNote: string
+  assignedTo?: number | null
 }
 
 interface AdminListResponse extends ApiResponseBase {
@@ -68,4 +92,9 @@ interface AdminListResponse extends ApiResponseBase {
 
 interface AdminDetailResponse extends ApiResponseBase {
   ticket: TicketRecord
+  operations?: TicketOperation[]
+}
+
+interface AdminOperationsResponse extends ApiResponseBase {
+  operations: TicketOperation[]
 }

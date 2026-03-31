@@ -2,10 +2,10 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { api } from '../api/client'
-import { getStatusTagType, getFeedbackTypeTagType } from '../i18n'
-import { getErrorMessage } from '../utils/errors'
-import { useAppStore } from '../stores/app'
+import { api } from '@/api/client'
+import { getStatusTagType, getFeedbackTypeTagType } from '@/i18n'
+import { getErrorMessage } from '@/utils/errors'
+import { useAppStore } from '@/stores/app'
 import TicketProgress from './TicketProgress.vue'
 
 const { t } = useI18n()

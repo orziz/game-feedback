@@ -1,9 +1,9 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { ElMessage } from 'element-plus'
-import { i18n } from '../i18n'
-import { api } from '../api/client'
-import { getErrorMessage } from '../utils/errors'
+import { i18n } from '@/i18n'
+import { api } from '@/api/client'
+import { getErrorMessage } from '@/utils/errors'
 
 /**
  * 应用全局 Pinia Store

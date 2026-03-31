@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "ignoreDeprecations": "6.0",
     "target": "ES2020",
     "useDefineForClassFields": true,
     "module": "ESNext",
@@ -13,7 +14,11 @@
     "noEmit": true,
     "jsx": "preserve",
     "strict": true,
-    "types": ["vite/client"]
+    "types": ["vite/client", "node"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
   },
   "include": ["env.d.ts", "src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue", "vite.config.ts"]
 }

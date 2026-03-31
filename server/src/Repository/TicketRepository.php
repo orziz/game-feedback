@@ -231,7 +231,7 @@ SQL;
      */
     public function findTicketByNo(string $ticketNo)
     {
-        $stmt = $this->pdo->prepare('SELECT ticket_no, type, severity, title, details, contact, attachment_name, attachment_storage, attachment_key, attachment_mime, attachment_size, status, admin_note, created_at, updated_at FROM feedback_tickets WHERE ticket_no = :ticket_no LIMIT 1');
+        $stmt = $this->pdo->prepare('SELECT ticket_no, type, severity, title, details, contact, attachment_name, attachment_storage, attachment_key, attachment_mime, attachment_size, status, admin_note, assigned_to, created_at, updated_at FROM feedback_tickets WHERE ticket_no = :ticket_no LIMIT 1');
         $stmt->execute([':ticket_no' => $ticketNo]);
 
         return $stmt->fetch(PDO::FETCH_ASSOC);
@@ -247,7 +247,18 @@ SQL;
      * @param int      $pageSize 每页条数
      * @return array{total: int, items: array<int, array<string, mixed>>}
      */
-    public function listTickets(?int $status = null, ?int $type = null, string $keyword = '', int $page = 1, int $pageSize = 20): array
+    /**
+     * 管理员工单列表查询（支持筛选 + 分页）
+     *
+     * @param int|null $status      状态筛选
+     * @param int|null $type        类型筛选
+     * @param string   $keyword     标题/内容关键词
+     * @param int|null $assignedTo  指派给用户的ID筛选
+     * @param int      $page        页码
+     * @param int      $pageSize    每页条数
+     * @return array{total: int, items: array<int, array<string, mixed>>}
+     */
+    public function listTickets(?int $status = null, ?int $type = null, string $keyword = '', ?int $assignedTo = null, int $page = 1, int $pageSize = 20): array
     {
         $baseSql = ' FROM feedback_tickets WHERE 1=1';
         $params = [];
@@ -268,12 +279,17 @@ SQL;
             $params[':keyword_details'] = '%' . $keyword . '%';
         }
 
+        if ($assignedTo !== null) {
+            $baseSql .= ' AND assigned_to = :assigned_to';
+            $params[':assigned_to'] = $assignedTo;
+        }
+
         $countStmt = $this->pdo->prepare('SELECT COUNT(1)' . $baseSql);
         $countStmt->execute($params);
         $total = (int)$countStmt->fetchColumn();
 
         $offset = ($page - 1) * $pageSize;
-        $sql = 'SELECT ticket_no, type, severity, title, contact, status, created_at, updated_at' . $baseSql . ' ORDER BY created_at DESC LIMIT :limit OFFSET :offset';
+        $sql = 'SELECT ticket_no, type, severity, title, contact, status, assigned_to, created_at, updated_at' . $baseSql . ' ORDER BY created_at DESC LIMIT :limit OFFSET :offset';
 
         $stmt = $this->pdo->prepare($sql);
         foreach ($params as $key => $value) {
@@ -364,5 +380,69 @@ SQL;
             ':updated_at' => $updatedAt,
             ':ticket_no' => $ticketNo,
         ]);
+    }
+
+    /**
+     * 指派工单给管理员用户
+     *
+     * @param string     $ticketNo   工单号
+     * @param int|null   $assignedTo 分配给的用户 ID（null 表示取消指派）
+     * @param string     $updatedAt  更新时间
+     * @return void
+     */
+    public function assignTicket(string $ticketNo, ?int $assignedTo, string $updatedAt): void
+    {
+        $stmt = $this->pdo->prepare('UPDATE feedback_tickets SET assigned_to = :assigned_to, updated_at = :updated_at WHERE ticket_no = :ticket_no');
+        $stmt->execute([
+            ':assigned_to' => $assignedTo,
+            ':updated_at' => $updatedAt,
+            ':ticket_no' => $ticketNo,
+        ]);
+    }
+
+    /**
+     * 记录工单操作
+     *
+     * @param string $ticketNo     工单号
+     * @param int    $operatorId   操作人ID
+     * @param string $operatorName 操作人名称
+     * @param string $operationType 操作类型（status_change, assign）
+     * @param string|null $oldValue 旧值
+     * @param string $newValue     新值
+     * @return void
+     */
+    public function recordOperation(string $ticketNo, int $operatorId, string $operatorName, string $operationType, ?string $oldValue, string $newValue): void
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ticket_operations (ticket_no, operator_id, operator_username, operation_type, old_value, new_value, created_at) ' .
+            'VALUES (:ticket_no, :operator_id, :operator_username, :operation_type, :old_value, :new_value, :created_at)'
+        );
+        $stmt->execute([
+            ':ticket_no' => $ticketNo,
+            ':operator_id' => $operatorId,
+            ':operator_username' => $operatorName,
+            ':operation_type' => $operationType,
+            ':old_value' => $oldValue,
+            ':new_value' => $newValue,
+            ':created_at' => date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    /**
+     * 获取工单的操作记录
+     *
+     * @param string $ticketNo 工单号
+     * @return array<int, array<string, mixed>> 操作记录列表
+     */
+    public function getTicketOperations(string $ticketNo): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT id, operator_id, operator_username, operation_type, old_value, new_value, created_at ' .
+            'FROM ticket_operations ' .
+            'WHERE ticket_no = :ticket_no ' .
+            'ORDER BY created_at DESC'
+        );
+        $stmt->execute([':ticket_no' => $ticketNo]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }

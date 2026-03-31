@@ -1,9 +1,9 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { ElMessage } from 'element-plus'
-import { i18n } from '../i18n'
-import { api, setApiTokenGetter } from '../api/client'
-import { getApiError, getErrorMessage } from '../utils/errors'
+import { i18n } from '@/i18n'
+import { api, setApiTokenGetter } from '@/api/client'
+import { getApiError, getErrorMessage } from '@/utils/errors'
 
 const TOKEN_STORAGE_KEY = 'feedback-admin-token'
 const bugType: FeedbackType = 0
@@ -44,6 +44,7 @@ export const useAdminStore = defineStore('admin', () => {
 
   const statusFilter = ref<TicketStatus | null>(null)
   const typeFilter = ref<FeedbackType | null>(null)
+  const assignedFilter = ref<number | null>(null)
   const keyword = ref('')
   const page = ref(1)
   const pageSize = ref(10)
@@ -107,6 +108,7 @@ export const useAdminStore = defineStore('admin', () => {
     selectedTicket.value = null
     statusFilter.value = null
     typeFilter.value = null
+    assignedFilter.value = null
     keyword.value = ''
     updateForm.value = createDefaultUpdateForm()
     users.value = []
@@ -126,6 +128,7 @@ export const useAdminStore = defineStore('admin', () => {
         status: statusFilter.value !== null ? statusFilter.value : undefined,
         type: typeFilter.value !== null ? typeFilter.value : undefined,
         keyword: keyword.value.trim() || undefined,
+        assignedTo: assignedFilter.value !== null ? assignedFilter.value : undefined,
       })
       tickets.value = data.tickets
       total.value = data.pagination?.total || 0
@@ -151,6 +154,7 @@ export const useAdminStore = defineStore('admin', () => {
       updateForm.value.status = data.ticket.status
       updateForm.value.severity = data.ticket.type === bugType ? (data.ticket.severity ?? 1) : null
       updateForm.value.adminNote = data.ticket.admin_note || ''
+      updateForm.value.assignedTo = data.ticket.assigned_to || null
     } catch (error) {
       ElMessage.error(getErrorMessage(error, t('messages.adminDetailFailed')))
     } finally {
@@ -166,12 +170,27 @@ export const useAdminStore = defineStore('admin', () => {
     }
     updating.value = true
     try {
+      // 检查是否有指派变化
+      const oldAssigned = selectedTicket.value?.assigned_to
+      const newAssigned = updateForm.value.assignedTo
+      
+      // 更新工单基本信息
       await api.admin.Ticket.post.update({
         ticketNo: selectedTicketNo.value,
         status: updateForm.value.status,
         severity: selectedTicket.value?.type === bugType ? updateForm.value.severity : null,
         adminNote: updateForm.value.adminNote,
       })
+
+      // 如果指派有变化，单独调用指派接口
+      const newAssignedValue = newAssigned || null
+      if (oldAssigned !== newAssignedValue) {
+        await api.admin.Ticket.post.assign({
+          ticketNo: selectedTicketNo.value,
+          assignedTo: newAssignedValue,
+        })
+      }
+
       ElMessage.success(t('messages.adminUpdateSuccess'))
       await Promise.all([loadTickets(), loadTicketDetail(selectedTicketNo.value)])
     } catch (error) {
@@ -236,7 +255,7 @@ export const useAdminStore = defineStore('admin', () => {
 
   return {
     token, loading, updating, currentUser,
-    statusFilter, typeFilter, keyword,
+    statusFilter, typeFilter, assignedFilter, keyword,
     page, pageSize, total, tickets,
     selectedTicket, updateForm,
     isAuthenticated, isSuperAdmin,

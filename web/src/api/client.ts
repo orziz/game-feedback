@@ -1,4 +1,4 @@
-import { i18n } from '../i18n'
+import { i18n } from '@/i18n'
 
 const DEFAULT_API_BASE = import.meta.env.VITE_API_BASE || '/api'
 

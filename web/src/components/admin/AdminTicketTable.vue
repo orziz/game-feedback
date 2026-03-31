@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { getFeedbackTypeTagType, getStatusTagType } from '../../i18n'
-import { useAppStore } from '../../stores/app'
+import { getFeedbackTypeTagType, getStatusTagType } from '@/i18n'
+import { useAppStore } from '@/stores/app'
 
 defineProps<{
   tickets:  TicketRecord[]
@@ -78,6 +78,12 @@ function severityClass(severity: Severity | null): string {
       </el-table-column>
       <el-table-column prop="title"    :label="t('admin.titleCol')"    min-width="220" show-overflow-tooltip />
       <el-table-column prop="contact"  :label="t('admin.contactCol')"  min-width="160" show-overflow-tooltip />
+      <el-table-column prop="assigned_to" :label="t('admin.assignedToCol')" width="100" align="center" header-align="center">
+        <template #default="{ row }">
+          <span v-if="!row.assigned_to" class="unassigned">{{ t('common.unassigned') }}</span>
+          <span v-else class="assigned-user">{{ row.assigned_to }}</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="status"   :label="t('admin.statusCol')"   width="100" align="center" header-align="center">
         <template #default="{ row }">
           <el-tag :type="getStatusTagType(row.status)" effect="dark" size="small" class="compact-tag">
@@ -172,6 +178,23 @@ function severityClass(severity: Severity | null): string {
   border-color: #fca5a5;
   background: #fef2f2;
   box-shadow: inset 0 0 0 1px rgba(185, 28, 28, 0.1);
+}
+
+.unassigned {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.assigned-user {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 12px;
+  background: #dbeafe;
+  color: #1e40af;
+  border-radius: 3px;
+  font-weight: 500;
 }
 
 @media (max-width: 768px) {

@@ -130,6 +130,58 @@ CALL _gf_add_idx('idx_type_title',     'type, title')$$
 CALL _gf_add_idx('idx_status_created', 'status, created_at')$$
 DROP PROCEDURE IF EXISTS _gf_add_idx$$
 
+-- ------------------------------------------------------------
+-- 步骤 5：添加工单指派字段 assigned_to（如不存在）
+-- ------------------------------------------------------------
+DROP PROCEDURE IF EXISTS _gf_add_assigned_to$$
+CREATE PROCEDURE _gf_add_assigned_to()
+BEGIN
+  DECLARE v_cnt INT DEFAULT 0;
+  SELECT COUNT(*) INTO v_cnt
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME   = 'feedback_tickets'
+    AND COLUMN_NAME  = 'assigned_to';
+  IF v_cnt = 0 THEN
+    ALTER TABLE feedback_tickets ADD COLUMN assigned_to BIGINT UNSIGNED NULL;
+    ALTER TABLE feedback_tickets ADD INDEX idx_assigned_to (assigned_to);
+  END IF;
+END$$
+CALL _gf_add_assigned_to()$$
+DROP PROCEDURE IF EXISTS _gf_add_assigned_to$$
+
+-- ------------------------------------------------------------
+-- 步骤 6：创建工单操作记录表 ticket_operations（如不存在）
+-- 记录工单的状态变更、指派操作及操作人
+-- ------------------------------------------------------------
+DROP PROCEDURE IF EXISTS _gf_create_operations$$
+CREATE PROCEDURE _gf_create_operations()
+BEGIN
+  DECLARE v_exists INT DEFAULT 0;
+  SELECT COUNT(*) INTO v_exists
+  FROM INFORMATION_SCHEMA.TABLES
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'ticket_operations';
+  
+  IF v_exists = 0 THEN
+    CREATE TABLE ticket_operations (
+      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      ticket_no VARCHAR(32) NOT NULL,
+      operator_id BIGINT UNSIGNED NOT NULL,
+      operator_username VARCHAR(64) NOT NULL,
+      operation_type VARCHAR(32) NOT NULL COMMENT 'status_change, assign',
+      old_value VARCHAR(255) NULL,
+      new_value VARCHAR(255) NOT NULL,
+      created_at DATETIME NOT NULL,
+      INDEX idx_ticket_no (ticket_no),
+      INDEX idx_operator_id (operator_id),
+      INDEX idx_created_at (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  END IF;
+END$$
+CALL _gf_create_operations()$$
+DROP PROCEDURE IF EXISTS _gf_create_operations$$
+
 DELIMITER ;
 
 -- ------------------------------------------------------------

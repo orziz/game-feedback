@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { useAppStore } from '../stores/app'
-import { useAdminStore } from '../stores/admin'
-import AdminLoginPanel from '../components/admin/AdminLoginPanel.vue'
-import AdminTab from '../components/AdminTab.vue'
-import InstallPanel from '../components/InstallPanel.vue'
+import { useAppStore } from '@/stores/app'
+import { useAdminStore } from '@/stores/admin'
+import AdminLoginPanel from '@/components/admin/AdminLoginPanel.vue'
+import AdminTab from '@/components/AdminTab.vue'
+import InstallPanel from '@/components/InstallPanel.vue'
 
 const { t } = useI18n()
 const appStore = useAppStore()

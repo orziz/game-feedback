@@ -1,14 +1,16 @@
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
-import { api } from '../../api/client'
-import { getStatusTagType } from '../../i18n'
-import { useAppStore } from '../../stores/app'
-import { triggerBlobDownload } from '../../utils/download'
-import { getErrorMessage } from '../../utils/errors'
+import { api } from '@/api/client'
+import { getStatusTagType } from '@/i18n'
+import { useAppStore } from '@/stores/app'
+import { useAdminStore } from '@/stores/admin'
+import { triggerBlobDownload } from '@/utils/download'
+import { getErrorMessage } from '@/utils/errors'
 
-defineProps<{
+const props = defineProps<{
   ticket:     TicketRecord | null
   updateForm: AdminUpdateForm
   updating:   boolean
@@ -17,8 +19,23 @@ defineProps<{
 const emit = defineEmits<{ save: [] }>()
 const { t } = useI18n()
 const appStore = useAppStore()
+const adminStore = useAdminStore()
 const { severityOptions, statusOptions } = storeToRefs(appStore)
+const { users } = storeToRefs(adminStore)
 const bugType: FeedbackType = 0
+
+const operationsLoading = ref(false)
+const operations = ref<TicketOperation[]>([])
+
+// 监视 ticket 变化，自动加载操作记录
+watch(
+  () => props.ticket?.ticket_no,
+  (ticketNo) => {
+    if (ticketNo) {
+      loadOperations(ticketNo)
+    }
+  }
+)
 
 async function handleDownloadAttachment(ticket: TicketRecord): Promise<void> {
   const attachmentName = ticket.attachment_name || ''
@@ -43,6 +60,29 @@ async function handleDownloadAttachment(ticket: TicketRecord): Promise<void> {
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('messages.attachmentDownloadFailed')))
   }
+}
+
+async function loadOperations(ticketNo: string): Promise<void> {
+  operationsLoading.value = true
+  try {
+    const data = await api.admin.Ticket.get.getOperations({ ticketNo })
+    operations.value = data.operations || []
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, t('messages.operationLoadFailed')))
+  } finally {
+    operationsLoading.value = false
+  }
+}
+
+function getOperationTypeLabel(opType: string): string {
+  return opType === 'status_change' ? t('admin.operationType.statusChange') : t('admin.operationType.assign')
+}
+
+function formatOperationValue(opType: string, value: string): string {
+  if (opType === 'status_change') {
+    return appStore.getStatusLabel(parseInt(value) as TicketStatus)
+  }
+  return value
 }
 </script>
 
@@ -99,6 +139,17 @@ async function handleDownloadAttachment(ticket: TicketRecord): Promise<void> {
           </el-select>
         </el-form-item>
 
+        <el-form-item :label="t('admin.detailAssignedTo')">
+          <el-select v-model="updateForm.assignedTo" clearable :placeholder="t('admin.assignPlaceholder')">
+            <el-option
+              v-for="u in users"
+              :key="u.id"
+              :label="u.username"
+              :value="u.id"
+            />
+          </el-select>
+        </el-form-item>
+
         <el-form-item :label="t('admin.detailSeverity')">
           <el-select v-model="updateForm.severity" :disabled="ticket.type !== bugType">
             <el-option
@@ -126,6 +177,40 @@ async function handleDownloadAttachment(ticket: TicketRecord): Promise<void> {
           {{ t('admin.saveButton') }}
         </el-button>
       </el-form>
+
+      <section v-if="ticket" class="admin-operations">
+        <div class="admin-operations__header">
+          <h4>{{ t('admin.operationHistory') }}</h4>
+          <el-button 
+            v-if="operations.length > 0"
+            type="primary" 
+            text 
+            size="small"
+            :loading="operationsLoading"
+            @click="loadOperations(ticket.ticket_no)"
+          >
+            {{ t('common.refresh') }}
+          </el-button>
+        </div>
+        <div v-loading="operationsLoading" class="admin-operations__list">
+          <div v-if="operations.length === 0" class="admin-operations__empty">
+            {{ t('admin.noOperations') }}
+          </div>
+          <div v-for="op in operations" :key="op.id" class="admin-operations__item">
+            <div class="admin-operations__time">{{ op.created_at }}</div>
+            <div class="admin-operations__content">
+              <span class="admin-operations__operator">{{ op.operator_username }}</span>
+              <span class="admin-operations__action">{{ getOperationTypeLabel(op.operation_type) }}</span>
+              <span v-if="op.old_value" class="admin-operations__old">
+                {{ t('admin.from') }} {{ formatOperationValue(op.operation_type, op.old_value) }}
+              </span>
+              <span class="admin-operations__new">
+                {{ t('admin.to') }} {{ formatOperationValue(op.operation_type, op.new_value) }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   </el-card>
 </template>
@@ -213,6 +298,92 @@ async function handleDownloadAttachment(ticket: TicketRecord): Promise<void> {
 .admin-detail-card__multiline {
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.admin-operations {
+  border: 1px solid rgba(15, 118, 110, 0.16);
+  border-radius: 12px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.admin-operations__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(15, 118, 110, 0.12);
+}
+
+.admin-operations__header h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.admin-operations__list {
+  max-height: 300px;
+  overflow-y: auto;
+  min-height: 60px;
+}
+
+.admin-operations__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 60px;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.admin-operations__item {
+  display: flex;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px dashed rgba(15, 118, 110, 0.12);
+  font-size: 12px;
+}
+
+.admin-operations__item:last-child {
+  border-bottom: none;
+}
+
+.admin-operations__time {
+  flex: 0 0 160px;
+  color: var(--ink-soft);
+}
+
+.admin-operations__content {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.admin-operations__operator {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.admin-operations__action {
+  padding: 0 4px;
+  background: rgba(15, 118, 110, 0.08);
+  border-radius: 3px;
+  color: var(--brand-strong);
+  font-weight: 500;
+}
+
+.admin-operations__old,
+.admin-operations__new {
+  color: var(--ink-soft);
+}
+
+.admin-operations__new {
+  font-weight: 500;
+  color: var(--ink);
 }
 
 @media (max-width: 640px) {

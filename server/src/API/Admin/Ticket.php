@@ -30,6 +30,12 @@ final class Ticket extends AdminSubModule
             'update' => [
                 'methods' => ['POST'],
             ],
+            'assign' => [
+                'methods' => ['POST'],
+            ],
+            'getOperations' => [
+                'methods' => ['GET'],
+            ],
         ];
     }
 
@@ -43,11 +49,14 @@ final class Ticket extends AdminSubModule
         $typeRaw = Request::query('type');
         $typeEnum = $typeRaw !== '' ? TicketType::tryFrom((int)$typeRaw) : null;
 
+        $assignedToRaw = Request::query('assignedTo');
+        $assignedTo = $assignedToRaw !== '' ? $this->sanitizer->parseInt($assignedToRaw, 1, 9999999999) : null;
+
         $keyword = $this->sanitizer->sanitizeSingleLine(Request::query('keyword'), 120);
         $page = $this->sanitizer->parseInt(Request::query('page', '1'), 1, 100000);
         $pageSize = $this->sanitizer->parseInt(Request::query('pageSize', '20'), 5, 100);
 
-        $result = $this->createTicketRepository()->listTickets($statusEnum, $typeEnum, $keyword, $page, $pageSize);
+        $result = $this->createTicketRepository()->listTickets($statusEnum, $typeEnum, $keyword, $assignedTo, $page, $pageSize);
 
         Responder::send([
             'ok' => true,
@@ -70,14 +79,18 @@ final class Ticket extends AdminSubModule
             Responder::error('INVALID_TICKET_NO', '工单号格式不正确。', 422);
         }
 
-        $ticket = $this->createTicketRepository()->findTicketByNo($ticketNo);
+        $repo = $this->createTicketRepository();
+        $ticket = $repo->findTicketByNo($ticketNo);
         if (!$ticket) {
             Responder::error('TICKET_NOT_FOUND', '工单不存在。', 404);
         }
 
+        $operations = $repo->getTicketOperations($ticketNo);
+
         Responder::send([
             'ok' => true,
             'ticket' => $ticket,
+            'operations' => $operations,
         ]);
     }
 
@@ -115,13 +128,27 @@ final class Ticket extends AdminSubModule
             $safeSeverity = $severity;
         }
 
+        $updatedAt = date('Y-m-d H:i:s');
         $repo->updateTicket(
             $ticketNo,
             $status,
             $safeSeverity,
             $adminNote !== '' ? $adminNote : null,
-            date('Y-m-d H:i:s')
+            $updatedAt
         );
+
+        // 记录状态变更
+        $oldStatus = (int)($ticket['status'] ?? 0);
+        if ($oldStatus !== $status) {
+            $repo->recordOperation(
+                $ticketNo,
+                (int)$this->currentUser['id'],
+                (string)$this->currentUser['username'],
+                'status_change',
+                (string)$oldStatus,
+                (string)$status
+            );
+        }
 
         Responder::send([
             'ok' => true,
@@ -237,5 +264,84 @@ final class Ticket extends AdminSubModule
         }
 
         Responder::error('UNSUPPORTED_STORAGE', '不支持的附件存储方式。', 500);
+    }
+
+    protected function assign(): void
+    {
+        $this->ensureAdmin();
+
+        $payload = Request::jsonBody();
+        $ticketNo = $this->sanitizer->sanitizeSingleLine((string)($payload['ticketNo'] ?? ''), 32);
+        $assignToId = array_key_exists('assignedTo', $payload) && $payload['assignedTo'] !== null
+            ? $this->sanitizer->parseInt((string)$payload['assignedTo'], 1, 9999999999)
+            : null;
+
+        if ($ticketNo === '') {
+            Responder::error('MISSING_TICKET_NO', '工单号不能为空。', 422);
+        }
+
+        if (!$this->sanitizer->isValidTicketNo($ticketNo)) {
+            Responder::error('INVALID_TICKET_NO', '工单号格式不正确。', 422);
+        }
+
+        $repo = $this->createTicketRepository();
+        $ticket = $repo->findTicketByNo($ticketNo);
+        if (!$ticket) {
+            Responder::error('TICKET_NOT_FOUND', '工单不存在。', 404);
+        }
+
+        // 验证指派的用户存在（如果有指定用户）
+        if ($assignToId !== null) {
+            $userRepo = new \GameFeedback\Repository\UserRepository($this->getPdo());
+            $user = $userRepo->findById($assignToId);
+            if (!$user) {
+                Responder::error('USER_NOT_FOUND', '指派的用户不存在。', 404);
+            }
+            $assignedUsername = (string)($user['username'] ?? '');
+        } else {
+            $assignedUsername = '';
+        }
+
+        $oldAssignedTo = (int)($ticket['assigned_to'] ?? 0);
+        $updatedAt = date('Y-m-d H:i:s');
+        $repo->assignTicket($ticketNo, $assignToId, $updatedAt);
+
+        // 记录指派操作
+        $repo->recordOperation(
+            $ticketNo,
+            (int)$this->currentUser['id'],
+            (string)$this->currentUser['username'],
+            'assign',
+            $oldAssignedTo > 0 ? (string)$oldAssignedTo : null,
+            $assignToId !== null ? (string)$assignToId : ''
+        );
+
+        Responder::send([
+            'ok' => true,
+            'message' => '指派成功。',
+        ]);
+    }
+
+    protected function getOperations(): void
+    {
+        $this->ensureAdmin();
+
+        $ticketNo = $this->sanitizer->sanitizeSingleLine(Request::query('ticketNo'), 32);
+        if ($ticketNo === '' || !$this->sanitizer->isValidTicketNo($ticketNo)) {
+            Responder::error('INVALID_TICKET_NO', '工单号格式不正确。', 422);
+        }
+
+        $repo = $this->createTicketRepository();
+        $ticket = $repo->findTicketByNo($ticketNo);
+        if (!$ticket) {
+            Responder::error('TICKET_NOT_FOUND', '工单不存在。', 404);
+        }
+
+        $operations = $repo->getTicketOperations($ticketNo);
+
+        Responder::send([
+            'ok' => true,
+            'operations' => $operations,
+        ]);
     }
 }

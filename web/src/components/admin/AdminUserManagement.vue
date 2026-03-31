@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
-import { useAdminStore } from '../../stores/admin'
+import { useAdminStore } from '@/stores/admin'
 import { storeToRefs } from 'pinia'
 
 const { t } = useI18n()
