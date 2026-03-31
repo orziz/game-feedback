@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace GameFeedback\API;
 
 use GameFeedback\Repository\TicketRepository;
+use GameFeedback\Repository\GameRepository;
 use GameFeedback\Repository\UserRepository;
 use GameFeedback\Support\AppInputSanitizer;
 use GameFeedback\Support\Database;
+use GameFeedback\Support\Request;
+use GameFeedback\Support\Responder;
 use RuntimeException;
 
 
@@ -102,5 +105,63 @@ abstract class BaseApiSubModule
         $repo->createTableIfNotExists();
 
         return $repo;
+    }
+
+    protected function createGameRepository(): GameRepository
+    {
+        $repo = new GameRepository(Database::createConfiguredPdo($this->dbConfig));
+        $repo->createTableIfNotExists();
+        $repo->ensureDefaultGame();
+
+        return $repo;
+    }
+
+    protected function resolveGameKey(bool $required = true): ?string
+    {
+        $gameKey = $this->sanitizer->sanitizeSingleLine(Request::query('gameKey'), 64);
+        if ($gameKey === '' && Request::method() !== 'GET') {
+            $payload = Request::isMultipartFormData() ? Request::formBody() : Request::jsonBody();
+            $gameKey = $this->sanitizer->sanitizeSingleLine((string)($payload['gameKey'] ?? ''), 64);
+        }
+
+        if ($gameKey === '') {
+            if ($required) {
+                Responder::error('MISSING_GAME_KEY', '缺少 gameKey。', 422);
+            }
+
+            return null;
+        }
+
+        if (preg_match('/^[a-z][a-z0-9_\-]{1,63}$/', $gameKey) !== 1) {
+            Responder::error('INVALID_GAME_KEY', 'gameKey 仅支持小写字母、数字、下划线和短横线。', 422);
+        }
+
+        return $gameKey;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function ensureEnabledGame(string $gameKey): array
+    {
+        $game = $this->ensureGameExists($gameKey);
+        if ((int)($game['is_enabled'] ?? 0) !== 1) {
+            Responder::error('GAME_DISABLED', '该游戏反馈入口已关闭。', 403);
+        }
+
+        return $game;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function ensureGameExists(string $gameKey): array
+    {
+        $game = $this->createGameRepository()->findByKey($gameKey);
+        if (!$game) {
+            Responder::error('GAME_NOT_FOUND', '游戏不存在。', 404);
+        }
+
+        return $game;
     }
 }

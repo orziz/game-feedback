@@ -26,6 +26,31 @@ CALL _gf_step1()$$
 DROP PROCEDURE IF EXISTS _gf_step1$$
 
 -- ------------------------------------------------------------
+-- 步骤 1.5：创建 feedback_games 表并确保默认游戏存在
+-- ------------------------------------------------------------
+DROP PROCEDURE IF EXISTS _gf_step15$$
+CREATE PROCEDURE _gf_step15()
+BEGIN
+  CREATE TABLE IF NOT EXISTS feedback_games (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    game_key VARCHAR(64) NOT NULL UNIQUE,
+    game_name VARCHAR(120) NOT NULL,
+    entry_path VARCHAR(160) NOT NULL,
+    is_enabled TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    INDEX idx_enabled (is_enabled)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+  IF NOT EXISTS (SELECT 1 FROM feedback_games WHERE game_key = 'default' LIMIT 1) THEN
+    INSERT INTO feedback_games (game_key, game_name, entry_path, is_enabled, created_at, updated_at)
+    VALUES ('default', '默认游戏', '/default', 1, NOW(), NOW());
+  END IF;
+END$$
+CALL _gf_step15()$$
+DROP PROCEDURE IF EXISTS _gf_step15$$
+
+-- ------------------------------------------------------------
 -- 步骤 2：将 feedback_tickets 的 ENUM 列迁移为 TINYINT
 --   映射关系：
 --     type:     BUG→0  优化→1  建议→2  其他→3
@@ -104,7 +129,10 @@ CALL _gf_add_col('attachment_storage', 'VARCHAR(16)  NULL')$$
 CALL _gf_add_col('attachment_key',     'VARCHAR(255) NULL')$$
 CALL _gf_add_col('attachment_mime',    'VARCHAR(80)  NULL')$$
 CALL _gf_add_col('attachment_size',    'INT UNSIGNED NULL')$$
+CALL _gf_add_col('game_key',           'VARCHAR(64) NOT NULL DEFAULT ''default''')$$
 DROP PROCEDURE IF EXISTS _gf_add_col$$
+
+UPDATE feedback_tickets SET game_key = 'default' WHERE game_key = '' OR game_key IS NULL$$
 
 -- ------------------------------------------------------------
 -- 步骤 4：补齐索引（逐个检查）
@@ -128,6 +156,7 @@ END$$
 
 CALL _gf_add_idx('idx_type_title',     'type, title')$$
 CALL _gf_add_idx('idx_status_created', 'status, created_at')$$
+CALL _gf_add_idx('idx_game_status_created', 'game_key, status, created_at')$$
 DROP PROCEDURE IF EXISTS _gf_add_idx$$
 
 DELIMITER ;

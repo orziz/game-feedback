@@ -44,10 +44,15 @@ final class Ticket extends AdminSubModule
         $typeEnum = $typeRaw !== '' ? TicketType::tryFrom((int)$typeRaw) : null;
 
         $keyword = $this->sanitizer->sanitizeSingleLine(Request::query('keyword'), 120);
+        $gameKey = $this->resolveGameKey(false);
         $page = $this->sanitizer->parseInt(Request::query('page', '1'), 1, 100000);
         $pageSize = $this->sanitizer->parseInt(Request::query('pageSize', '20'), 5, 100);
 
-        $result = $this->createTicketRepository()->listTickets($statusEnum, $typeEnum, $keyword, $page, $pageSize);
+        if ($gameKey !== null) {
+            $this->ensureGameExists($gameKey);
+        }
+
+        $result = $this->createTicketRepository()->listTickets($statusEnum, $typeEnum, $keyword, $page, $pageSize, $gameKey);
 
         Responder::send([
             'ok' => true,
@@ -66,11 +71,16 @@ final class Ticket extends AdminSubModule
         $this->ensureAdmin();
 
         $ticketNo = $this->sanitizer->sanitizeSingleLine(Request::query('ticketNo'), 32);
+        $gameKey = $this->resolveGameKey(false);
         if ($ticketNo === '' || !$this->sanitizer->isValidTicketNo($ticketNo)) {
             Responder::error('INVALID_TICKET_NO', '工单号格式不正确。', 422);
         }
 
-        $ticket = $this->createTicketRepository()->findTicketByNo($ticketNo);
+        if ($gameKey !== null) {
+            $this->ensureGameExists($gameKey);
+        }
+
+        $ticket = $this->createTicketRepository()->findTicketByNo($ticketNo, $gameKey);
         if (!$ticket) {
             Responder::error('TICKET_NOT_FOUND', '工单不存在。', 404);
         }
@@ -87,6 +97,7 @@ final class Ticket extends AdminSubModule
 
         $payload = Request::jsonBody();
         $ticketNo = $this->sanitizer->sanitizeSingleLine((string)($payload['ticketNo'] ?? ''), 32);
+        $gameKey = $this->sanitizer->sanitizeSingleLine((string)($payload['gameKey'] ?? ''), 64);
         $status = TicketStatus::tryFrom((int)($payload['status'] ?? -1));
         $severity = array_key_exists('severity', $payload)
             ? TicketSeverity::tryFrom((int)$payload['severity'])
@@ -97,12 +108,21 @@ final class Ticket extends AdminSubModule
             Responder::error('MISSING_REQUIRED_FIELDS', '工单号和状态不能为空。', 422);
         }
 
+        if ($gameKey !== '' && preg_match('/^[a-z][a-z0-9_\-]{1,63}$/', $gameKey) !== 1) {
+            Responder::error('INVALID_GAME_KEY', 'gameKey 仅支持小写字母、数字、下划线和短横线。', 422);
+        }
+
         if (!$this->sanitizer->isValidTicketNo($ticketNo)) {
             Responder::error('INVALID_TICKET_NO', '工单号格式不正确。', 422);
         }
 
         $repo = $this->createTicketRepository();
-        $ticket = $repo->findTicketByNo($ticketNo);
+        $scopeGameKey = $gameKey !== '' ? $gameKey : null;
+        if ($scopeGameKey !== null) {
+            $this->ensureGameExists($scopeGameKey);
+        }
+
+        $ticket = $repo->findTicketByNo($ticketNo, $scopeGameKey);
         if (!$ticket) {
             Responder::error('TICKET_NOT_FOUND', '工单不存在。', 404);
         }
@@ -120,7 +140,8 @@ final class Ticket extends AdminSubModule
             $status,
             $safeSeverity,
             $adminNote !== '' ? $adminNote : null,
-            date('Y-m-d H:i:s')
+            date('Y-m-d H:i:s'),
+            $scopeGameKey
         );
 
         Responder::send([
@@ -134,11 +155,16 @@ final class Ticket extends AdminSubModule
         $this->ensureAdmin();
 
         $ticketNo = $this->sanitizer->sanitizeSingleLine(Request::query('ticketNo'), 32);
+        $gameKey = $this->resolveGameKey(false);
         if ($ticketNo === '' || !$this->sanitizer->isValidTicketNo($ticketNo)) {
             Responder::error('INVALID_TICKET_NO', '工单号格式不正确。', 422);
         }
 
-        $ticket = $this->createTicketRepository()->findTicketByNo($ticketNo);
+        if ($gameKey !== null) {
+            $this->ensureGameExists($gameKey);
+        }
+
+        $ticket = $this->createTicketRepository()->findTicketByNo($ticketNo, $gameKey);
         if (!$ticket) {
             Responder::error('TICKET_NOT_FOUND', '工单不存在。', 404);
         }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { api } from '../api/client'
@@ -9,12 +10,22 @@ import { useAppStore } from '../stores/app'
 import TicketProgress from './TicketProgress.vue'
 
 const { t } = useI18n()
+const route = useRoute()
 const appStore = useAppStore()
 const keyword   = ref('')
 const searching = ref(false)
 const results   = ref<TicketSearchResponse['tickets']>([])
 const total     = ref(0)
 const expandedTicketNos = ref<string[]>([])
+
+function resolveGameKey(): string {
+  const raw = route.query.gameKey
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    return raw.trim()
+  }
+
+  return 'default'
+}
 
 function isTicketNoKeyword(value: string): boolean {
   return /^FB\d{8}[A-F0-9]{6}$/.test(value)
@@ -32,7 +43,10 @@ async function handleSearch(): Promise<void> {
   total.value     = 0
   expandedTicketNos.value = []
   try {
-    const data = await api.feedback.Ticket.get.search({ keyword: trimmedKeyword })
+    const data = await api.feedback.Ticket.get.search({
+      gameKey: resolveGameKey(),
+      keyword: trimmedKeyword,
+    })
     results.value = data.tickets
     total.value   = data.pagination?.total ?? results.value.length
     expandedTicketNos.value = isTicketNoKeyword(trimmedKeyword)

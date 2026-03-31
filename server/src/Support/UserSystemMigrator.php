@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GameFeedback\Support;
 
 use GameFeedback\Enums\UserRole;
+use GameFeedback\Repository\GameRepository;
 use GameFeedback\Repository\TicketRepository;
 use GameFeedback\Repository\UserRepository;
 
@@ -29,6 +30,9 @@ final class UserSystemMigrator
             // app_secret 已存在，只需补齐可能缺失的表结构（幂等）
             $pdo = Database::createConfiguredPdo($dbConfig);
             (new TicketRepository($pdo))->migrateSchema();
+            $gameRepo = new GameRepository($pdo);
+            $gameRepo->createTableIfNotExists();
+            $gameRepo->ensureDefaultGame();
             return $dbConfig;
         }
 
@@ -49,6 +53,12 @@ final class UserSystemMigrator
 
         $newConfig['app_secret'] = bin2hex(random_bytes(32));
         Database::writeConfig($databaseConfigPath, $newConfig);
+
+        $pdo = Database::createConfiguredPdo($newConfig);
+        (new TicketRepository($pdo))->migrateSchema();
+        $gameRepo = new GameRepository($pdo);
+        $gameRepo->createTableIfNotExists();
+        $gameRepo->ensureDefaultGame();
 
         return $newConfig;
     }

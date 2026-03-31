@@ -7,6 +7,7 @@ import AdminFiltersBar from './admin/AdminFiltersBar.vue'
 import AdminTicketTable from './admin/AdminTicketTable.vue'
 import AdminTicketDetail from './admin/AdminTicketDetail.vue'
 import AdminUserManagement from './admin/AdminUserManagement.vue'
+import AdminGameManagement from './admin/AdminGameManagement.vue'
 
 const { t } = useI18n()
 const adminStore = useAdminStore()
@@ -24,6 +25,8 @@ const {
   updating,
   isSuperAdmin,
   currentUser,
+  games,
+  selectedGameKey,
 } = storeToRefs(adminStore)
 
 const detailVisible = ref(false)
@@ -31,7 +34,8 @@ const adminTab = ref('tickets')
 
 async function handleSelectTicket(ticketNo: string): Promise<void> {
   detailVisible.value = true
-  await adminStore.loadTicketDetail(ticketNo)
+  const ticket = tickets.value.find((item) => item.ticket_no === ticketNo)
+  await adminStore.loadTicketDetail(ticketNo, ticket?.game_key)
 }
 </script>
 
@@ -49,6 +53,22 @@ async function handleSelectTicket(ticketNo: string): Promise<void> {
       <el-tab-pane :label="t('admin.queueTitle')" name="tickets">
         <section class="admin-pane admin-pane--split">
           <div class="admin-pane__top">
+            <div class="admin-pane__game-filter">
+              <el-select
+                v-model="selectedGameKey"
+                clearable
+                filterable
+                :placeholder="t('admin.gameFilterPlaceholder')"
+                @change="adminStore.refresh()"
+              >
+                <el-option
+                  v-for="game in games"
+                  :key="game.game_key"
+                  :label="`${game.game_name} (${game.game_key})`"
+                  :value="game.game_key"
+                />
+              </el-select>
+            </div>
             <AdminFiltersBar
               v-model:status-filter="statusFilter"
               v-model:type-filter="typeFilter"
@@ -92,6 +112,12 @@ async function handleSelectTicket(ticketNo: string): Promise<void> {
       <el-tab-pane v-if="isSuperAdmin" :label="t('admin.userManagement')" name="users">
         <section class="admin-pane admin-pane--scroll">
           <AdminUserManagement />
+        </section>
+      </el-tab-pane>
+
+      <el-tab-pane v-if="isSuperAdmin" :label="t('admin.gameManagement')" name="games">
+        <section class="admin-pane admin-pane--scroll">
+          <AdminGameManagement />
         </section>
       </el-tab-pane>
     </el-tabs>
@@ -171,6 +197,11 @@ async function handleSelectTicket(ticketNo: string): Promise<void> {
 
 .admin-pane__bottom {
   overflow: hidden;
+}
+
+.admin-pane__game-filter {
+  margin-bottom: 10px;
+  max-width: 420px;
 }
 
 .admin-pane--scroll {

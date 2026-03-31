@@ -54,6 +54,7 @@ function severityClass(severity: Severity | null): string {
       class="admin-table"
       @row-click="(row: TicketRecord) => emit('select', row.ticket_no)"
     >
+      <el-table-column prop="game_key" :label="t('admin.gameKeyCol')" min-width="120" />
       <el-table-column prop="ticket_no" :label="t('admin.ticketIdCol')" min-width="170" />
       <el-table-column prop="type" :label="t('admin.typeCol')" width="92" align="center" header-align="center">
         <template #default="{ row }">

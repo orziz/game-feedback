@@ -32,6 +32,7 @@ final class Ticket extends BaseApiSubModule
     protected function submit(): void
     {
         $payload = Request::isMultipartFormData() ? Request::formBody() : Request::jsonBody();
+        $gameKey = $this->sanitizer->sanitizeSingleLine((string)($payload['gameKey'] ?? ''), 64);
 
         $type = TicketType::tryFrom((int)($payload['type'] ?? -1));
         $severity = TicketSeverity::tryFrom((int)($payload['severity'] ?? -1));
@@ -39,14 +40,20 @@ final class Ticket extends BaseApiSubModule
         $description = $this->sanitizer->sanitizeText((string)($payload['description'] ?? ''), 3000);
         $contact = $this->sanitizer->sanitizeSingleLine((string)($payload['contact'] ?? ''), 120);
 
-        if ($type === null || $severity === null || $title === '' || $description === '') {
+        if ($gameKey === '' || $type === null || $severity === null || $title === '' || $description === '') {
             Responder::error('MISSING_REQUIRED_FIELDS', '反馈类型、严重程度、标题、详细介绍均为必填。', 422);
         }
+
+        if (preg_match('/^[a-z][a-z0-9_\-]{1,63}$/', $gameKey) !== 1) {
+            Responder::error('INVALID_GAME_KEY', 'gameKey 仅支持小写字母、数字、下划线和短横线。', 422);
+        }
+
+        $this->ensureEnabledGame($gameKey);
 
         $attachmentMeta = (new AttachmentUploader($this->dbConfig))->handleUpload(Request::uploadedFile('attachment'));
 
         $repo = $this->createTicketRepository();
-        $existingTicketNo = $repo->findDuplicateTicketNo($type, $title, $description);
+        $existingTicketNo = $repo->findDuplicateTicketNo($type, $title, $description, $gameKey);
 
         if ($existingTicketNo !== false) {
             Responder::send([
@@ -61,6 +68,7 @@ final class Ticket extends BaseApiSubModule
         $now = date('Y-m-d H:i:s');
 
         $repo->insertTicket([
+            ':game_key' => $gameKey,
             ':ticket_no' => $ticketNo,
             ':type' => $type,
             ':severity' => $severity,
@@ -88,13 +96,16 @@ final class Ticket extends BaseApiSubModule
     protected function search(): void
     {
         $keyword = $this->sanitizer->sanitizeSingleLine(Request::query('keyword'), 120);
+        $gameKey = $this->resolveGameKey(true);
         if ($keyword === '') {
             Responder::error('MISSING_KEYWORD', '请输入工单号或标题/内容关键词。', 422);
         }
 
+        $this->ensureEnabledGame((string)$gameKey);
+
         $repo = $this->createTicketRepository();
         if ($this->sanitizer->isValidTicketNo($keyword)) {
-            $ticket = $repo->findTicketByNo($keyword);
+            $ticket = $repo->findTicketByNo($keyword, (string)$gameKey);
             if ($ticket) {
                 $ticket = $this->toPublicTicket($ticket);
             }
@@ -113,7 +124,7 @@ final class Ticket extends BaseApiSubModule
 
         $page = $this->sanitizer->parseInt(Request::query('page', '1'), 1, 100000);
         $pageSize = $this->sanitizer->parseInt(Request::query('pageSize', '10'), 5, 50);
-        $result = $repo->searchPublicTickets($keyword, $page, $pageSize);
+        $result = $repo->searchPublicTickets($keyword, $page, $pageSize, (string)$gameKey);
 
         Responder::send([
             'ok' => true,

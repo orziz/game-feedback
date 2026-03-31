@@ -10,6 +10,7 @@ declare namespace API.Feedback.Ticket {
 
   namespace HttpParams {
     interface Search {
+      gameKey: string
       keyword: string
       page?: number
       pageSize?: number
@@ -20,6 +21,7 @@ declare namespace API.Feedback.Ticket {
 }
 
 interface SubmitForm {
+  gameKey?: string
   type: FeedbackType
   severity: Severity
   reproduceSteps?: string
@@ -30,6 +32,7 @@ interface SubmitForm {
 }
 
 interface PublicTicketRecord {
+  game_key?: string
   ticket_no: string
   type: FeedbackType
   severity: Severity | null

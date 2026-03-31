@@ -28,7 +28,10 @@ async function handleDownloadAttachment(ticket: TicketRecord): Promise<void> {
   }
 
   try {
-    const blob = await api.admin.Ticket.getBlob.attachmentDownload({ ticketNo: ticket.ticket_no })
+    const blob = await api.admin.Ticket.getBlob.attachmentDownload({
+      ticketNo: ticket.ticket_no,
+      gameKey: ticket.game_key,
+    })
     triggerBlobDownload(blob, attachmentName || `attachment-${ticket.ticket_no}`)
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('messages.attachmentDownloadFailed')))

@@ -56,6 +56,9 @@ export const useAdminStore = defineStore('admin', () => {
 
   const users = ref<AdminUser[]>([])
   const usersLoading = ref(false)
+  const games = ref<AdminGame[]>([])
+  const gamesLoading = ref(false)
+  const selectedGameKey = ref<string>('')
 
   const isAuthenticated = computed(() => Boolean(token.value))
   const isSuperAdmin = computed(() => currentUser.value?.role === 'super_admin')
@@ -70,6 +73,7 @@ export const useAdminStore = defineStore('admin', () => {
     try {
       const data = await api.admin.Auth.get.currentUser()
       currentUser.value = data.user
+      await loadGames()
       await loadTickets(1)
     } catch {
       token.value = ''
@@ -87,6 +91,7 @@ export const useAdminStore = defineStore('admin', () => {
       currentUser.value = data.user
       writeStoredToken(data.token)
       ElMessage.success(t('messages.adminLoginSuccess'))
+      await loadGames()
       await loadTickets(1)
     } catch (error) {
       ElMessage.error(getErrorMessage(error, t('messages.adminLoginFailed')))
@@ -110,6 +115,8 @@ export const useAdminStore = defineStore('admin', () => {
     keyword.value = ''
     updateForm.value = createDefaultUpdateForm()
     users.value = []
+    games.value = []
+    selectedGameKey.value = ''
     clearStoredToken()
     if (showMessage) ElMessage.success(t('messages.adminLogoutSuccess'))
   }
@@ -126,6 +133,7 @@ export const useAdminStore = defineStore('admin', () => {
         status: statusFilter.value !== null ? statusFilter.value : undefined,
         type: typeFilter.value !== null ? typeFilter.value : undefined,
         keyword: keyword.value.trim() || undefined,
+        gameKey: selectedGameKey.value || undefined,
       })
       tickets.value = data.tickets
       total.value = data.pagination?.total || 0
@@ -140,12 +148,12 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
-  async function loadTicketDetail(ticketNo: string): Promise<void> {
+  async function loadTicketDetail(ticketNo: string, gameKey?: string): Promise<void> {
     const { t } = i18n.global
     if (!token.value || !ticketNo) return
     loading.value = true
     try {
-      const data = await api.admin.Ticket.get.detail({ ticketNo })
+      const data = await api.admin.Ticket.get.detail({ ticketNo, gameKey })
       selectedTicket.value = data.ticket
       selectedTicketNo.value = ticketNo
       updateForm.value.status = data.ticket.status
@@ -171,9 +179,10 @@ export const useAdminStore = defineStore('admin', () => {
         status: updateForm.value.status,
         severity: selectedTicket.value?.type === bugType ? updateForm.value.severity : null,
         adminNote: updateForm.value.adminNote,
+        gameKey: selectedTicket.value?.game_key || undefined,
       })
       ElMessage.success(t('messages.adminUpdateSuccess'))
-      await Promise.all([loadTickets(), loadTicketDetail(selectedTicketNo.value)])
+      await Promise.all([loadTickets(), loadTicketDetail(selectedTicketNo.value, selectedTicket.value?.game_key)])
     } catch (error) {
       ElMessage.error(getErrorMessage(error, t('messages.adminUpdateFailed')))
     } finally {
@@ -230,6 +239,69 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
+  async function loadGames(): Promise<void> {
+    const { t } = i18n.global
+    if (!token.value) return
+
+    gamesLoading.value = true
+    try {
+      const data = await api.admin.Game.get.list()
+      games.value = data.games
+    } catch (error) {
+      ElMessage.error(getErrorMessage(error, t('messages.gameLoadFailed')))
+    } finally {
+      gamesLoading.value = false
+    }
+  }
+
+  async function createGame(gameKey: string, gameName: string, entryPath: string): Promise<void> {
+    const { t } = i18n.global
+    try {
+      await api.admin.Game.post.create({ gameKey, gameName, entryPath })
+      ElMessage.success(t('messages.gameCreateSuccess'))
+      await loadGames()
+    } catch (error) {
+      ElMessage.error(getErrorMessage(error, t('messages.gameCreateFailed')))
+      throw error
+    }
+  }
+
+  async function setGameEnabled(gameKey: string, enabled: boolean): Promise<void> {
+    const { t } = i18n.global
+    try {
+      await api.admin.Game.post.updateStatus({ gameKey, enabled })
+      ElMessage.success(enabled ? t('messages.gameEnableSuccess') : t('messages.gameDisableSuccess'))
+      await loadGames()
+      await loadTickets(1)
+    } catch (error) {
+      ElMessage.error(getErrorMessage(error, t('messages.gameStatusUpdateFailed')))
+      throw error
+    }
+  }
+
+  async function updateGameEntry(gameKey: string, entryPath: string): Promise<void> {
+    const { t } = i18n.global
+    try {
+      await api.admin.Game.post.updateEntry({ gameKey, entryPath })
+      ElMessage.success(t('messages.gameEntryUpdateSuccess'))
+      await loadGames()
+    } catch (error) {
+      ElMessage.error(getErrorMessage(error, t('messages.gameEntryUpdateFailed')))
+      throw error
+    }
+  }
+
+  async function loadEntrypoints(): Promise<AdminGameEntrypoint[]> {
+    const { t } = i18n.global
+    try {
+      const data = await api.admin.Game.get.entrypoints()
+      return data.entrypoints
+    } catch (error) {
+      ElMessage.error(getErrorMessage(error, t('messages.gameEntrypointLoadFailed')))
+      throw error
+    }
+  }
+
   async function changePage(nextPage: number): Promise<void> { await loadTickets(nextPage) }
   async function changePageSize(n: number): Promise<void> { pageSize.value = n; await loadTickets(1) }
   async function refresh(): Promise<void> { await loadTickets(1) }
@@ -241,9 +313,11 @@ export const useAdminStore = defineStore('admin', () => {
     selectedTicket, updateForm,
     isAuthenticated, isSuperAdmin,
     users, usersLoading,
+    games, gamesLoading, selectedGameKey,
     restoreSession, login, logout,
     loadTickets, loadTicketDetail,
     saveTicket, changePage, changePageSize, refresh,
     loadUsers, addUser, removeUser, resetPassword,
+    loadGames, createGame, setGameEnabled, updateGameEntry, loadEntrypoints,
   }
 })

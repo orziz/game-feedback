@@ -37,6 +37,7 @@ final class TicketRepository
                 $sql = <<<SQL
 CREATE TABLE IF NOT EXISTS feedback_tickets (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    game_key VARCHAR(64) NOT NULL DEFAULT 'default',
   ticket_no VARCHAR(32) NOT NULL UNIQUE,
     type TINYINT UNSIGNED NOT NULL,
     severity TINYINT UNSIGNED NULL,
@@ -52,14 +53,14 @@ CREATE TABLE IF NOT EXISTS feedback_tickets (
   admin_note TEXT NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,
+    INDEX idx_game_status_created (game_key, status, created_at),
   INDEX idx_type_title (type, title),
   INDEX idx_status_created (status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 SQL;
 
         $this->pdo->exec($sql);
-        $this->migrateLegacyEnumColumnsIfNeeded();
-        $this->ensureAttachmentColumns();
+                $this->migrateSchema();
     }
 
     /**
@@ -71,6 +72,7 @@ SQL;
     {
         $this->migrateLegacyEnumColumnsIfNeeded();
         $this->ensureAttachmentColumns();
+        $this->ensureGameColumns();
     }
 
     /**
@@ -157,6 +159,27 @@ SQL;
     }
 
     /**
+     * 确保多游戏相关字段存在
+     */
+    private function ensureGameColumns(): void
+    {
+        $columnDefs = [];
+
+        if (!$this->columnExists('game_key')) {
+            $columnDefs[] = "ADD COLUMN game_key VARCHAR(64) NOT NULL DEFAULT 'default' AFTER id";
+        }
+
+        if (!empty($columnDefs)) {
+            $this->pdo->exec('ALTER TABLE feedback_tickets ' . implode(', ', $columnDefs));
+            $this->pdo->exec("UPDATE feedback_tickets SET game_key = 'default' WHERE game_key = '' OR game_key IS NULL");
+        }
+
+        if (!$this->indexExists('idx_game_status_created')) {
+            $this->pdo->exec('ALTER TABLE feedback_tickets ADD INDEX idx_game_status_created (game_key, status, created_at)');
+        }
+    }
+
+    /**
      * 检查指定列是否存在于 feedback_tickets 表
      *
      * @param string $column 列名
@@ -165,12 +188,25 @@ SQL;
     private function columnExists(string $column): bool
     {
         $stmt = $this->pdo->prepare(
-            'SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = :table_name AND COLUMN_NAME = :column_name LIMIT 1'
+            'SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND COLUMN_NAME = :column_name LIMIT 1'
         );
         $stmt->execute([
             ':table_name' => 'feedback_tickets',
             ':column_name' => $column,
         ]);
+        return $stmt->fetch(PDO::FETCH_ASSOC) !== false;
+    }
+
+    private function indexExists(string $indexName): bool
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND INDEX_NAME = :index_name LIMIT 1'
+        );
+        $stmt->execute([
+            ':table_name' => 'feedback_tickets',
+            ':index_name' => $indexName,
+        ]);
+
         return $stmt->fetch(PDO::FETCH_ASSOC) !== false;
     }
 
@@ -182,10 +218,11 @@ SQL;
      * @param string $details 详情
      * @return string|false 已存在则返回工单号，否则 false
      */
-    public function findDuplicateTicketNo(int $type, string $title, string $details)
+    public function findDuplicateTicketNo(int $type, string $title, string $details, string $gameKey = 'default')
     {
-        $stmt = $this->pdo->prepare('SELECT ticket_no FROM feedback_tickets WHERE type = :type AND title = :title AND details = :details LIMIT 1');
+        $stmt = $this->pdo->prepare('SELECT ticket_no FROM feedback_tickets WHERE game_key = :game_key AND type = :type AND title = :title AND details = :details LIMIT 1');
         $stmt->execute([
+            ':game_key' => $gameKey,
             ':type' => $type,
             ':title' => $title,
             ':details' => $details,
@@ -219,7 +256,7 @@ SQL;
      */
     public function insertTicket(array $ticket): void
     {
-        $stmt = $this->pdo->prepare('INSERT INTO feedback_tickets (ticket_no, type, severity, title, details, contact, attachment_name, attachment_storage, attachment_key, attachment_mime, attachment_size, status, admin_note, created_at, updated_at) VALUES (:ticket_no, :type, :severity, :title, :details, :contact, :attachment_name, :attachment_storage, :attachment_key, :attachment_mime, :attachment_size, :status, :admin_note, :created_at, :updated_at)');
+        $stmt = $this->pdo->prepare('INSERT INTO feedback_tickets (game_key, ticket_no, type, severity, title, details, contact, attachment_name, attachment_storage, attachment_key, attachment_mime, attachment_size, status, admin_note, created_at, updated_at) VALUES (:game_key, :ticket_no, :type, :severity, :title, :details, :contact, :attachment_name, :attachment_storage, :attachment_key, :attachment_mime, :attachment_size, :status, :admin_note, :created_at, :updated_at)');
         $stmt->execute($ticket);
     }
 
@@ -229,10 +266,18 @@ SQL;
      * @param string $ticketNo 工单号
      * @return array<string, mixed>|false 工单记录或 false
      */
-    public function findTicketByNo(string $ticketNo)
+    public function findTicketByNo(string $ticketNo, ?string $gameKey = null)
     {
-        $stmt = $this->pdo->prepare('SELECT ticket_no, type, severity, title, details, contact, attachment_name, attachment_storage, attachment_key, attachment_mime, attachment_size, status, admin_note, created_at, updated_at FROM feedback_tickets WHERE ticket_no = :ticket_no LIMIT 1');
-        $stmt->execute([':ticket_no' => $ticketNo]);
+        if ($gameKey === null) {
+            $stmt = $this->pdo->prepare('SELECT game_key, ticket_no, type, severity, title, details, contact, attachment_name, attachment_storage, attachment_key, attachment_mime, attachment_size, status, admin_note, created_at, updated_at FROM feedback_tickets WHERE ticket_no = :ticket_no LIMIT 1');
+            $stmt->execute([':ticket_no' => $ticketNo]);
+        } else {
+            $stmt = $this->pdo->prepare('SELECT game_key, ticket_no, type, severity, title, details, contact, attachment_name, attachment_storage, attachment_key, attachment_mime, attachment_size, status, admin_note, created_at, updated_at FROM feedback_tickets WHERE ticket_no = :ticket_no AND game_key = :game_key LIMIT 1');
+            $stmt->execute([
+                ':ticket_no' => $ticketNo,
+                ':game_key' => $gameKey,
+            ]);
+        }
 
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
@@ -247,10 +292,15 @@ SQL;
      * @param int      $pageSize 每页条数
      * @return array{total: int, items: array<int, array<string, mixed>>}
      */
-    public function listTickets(?int $status = null, ?int $type = null, string $keyword = '', int $page = 1, int $pageSize = 20): array
+    public function listTickets(?int $status = null, ?int $type = null, string $keyword = '', int $page = 1, int $pageSize = 20, ?string $gameKey = null): array
     {
         $baseSql = ' FROM feedback_tickets WHERE 1=1';
         $params = [];
+
+        if ($gameKey !== null && $gameKey !== '') {
+            $baseSql .= ' AND game_key = :game_key';
+            $params[':game_key'] = $gameKey;
+        }
 
         if ($status !== null) {
             $baseSql .= ' AND status = :status';
@@ -273,7 +323,7 @@ SQL;
         $total = (int)$countStmt->fetchColumn();
 
         $offset = ($page - 1) * $pageSize;
-        $sql = 'SELECT ticket_no, type, severity, title, contact, status, created_at, updated_at' . $baseSql . ' ORDER BY created_at DESC LIMIT :limit OFFSET :offset';
+        $sql = 'SELECT game_key, ticket_no, type, severity, title, contact, status, created_at, updated_at' . $baseSql . ' ORDER BY created_at DESC LIMIT :limit OFFSET :offset';
 
         $stmt = $this->pdo->prepare($sql);
         foreach ($params as $key => $value) {
@@ -297,10 +347,15 @@ SQL;
      * @param int    $pageSize 每页条数
      * @return array{total: int, items: array<int, array<string, mixed>>}
      */
-    public function searchPublicTickets(string $keyword, int $page = 1, int $pageSize = 20): array
+    public function searchPublicTickets(string $keyword, int $page = 1, int $pageSize = 20, ?string $gameKey = null): array
     {
         $baseSql = ' FROM feedback_tickets WHERE 1=1';
         $params = [];
+
+        if ($gameKey !== null && $gameKey !== '') {
+            $baseSql .= ' AND game_key = :game_key';
+            $params[':game_key'] = $gameKey;
+        }
 
         if ($keyword !== '') {
             $baseSql .= ' AND (ticket_no LIKE :keyword_ticket_no OR title LIKE :keyword_title OR details LIKE :keyword_details OR admin_note LIKE :keyword_note)';
@@ -315,7 +370,7 @@ SQL;
         $total = (int)$countStmt->fetchColumn();
 
         $offset = ($page - 1) * $pageSize;
-        $sql = 'SELECT ticket_no, type, severity, title, details, status, admin_note, created_at, updated_at' . $baseSql . ' ORDER BY updated_at DESC LIMIT :limit OFFSET :offset';
+        $sql = 'SELECT game_key, ticket_no, type, severity, title, details, status, admin_note, created_at, updated_at' . $baseSql . ' ORDER BY updated_at DESC LIMIT :limit OFFSET :offset';
 
         $stmt = $this->pdo->prepare($sql);
         foreach ($params as $key => $value) {
@@ -337,10 +392,18 @@ SQL;
      * @param string $ticketNo 工单号
      * @return bool
      */
-    public function existsByNo(string $ticketNo): bool
+    public function existsByNo(string $ticketNo, ?string $gameKey = null): bool
     {
-        $stmt = $this->pdo->prepare('SELECT id FROM feedback_tickets WHERE ticket_no = :ticket_no LIMIT 1');
-        $stmt->execute([':ticket_no' => $ticketNo]);
+        if ($gameKey === null) {
+            $stmt = $this->pdo->prepare('SELECT id FROM feedback_tickets WHERE ticket_no = :ticket_no LIMIT 1');
+            $stmt->execute([':ticket_no' => $ticketNo]);
+        } else {
+            $stmt = $this->pdo->prepare('SELECT id FROM feedback_tickets WHERE ticket_no = :ticket_no AND game_key = :game_key LIMIT 1');
+            $stmt->execute([
+                ':ticket_no' => $ticketNo,
+                ':game_key' => $gameKey,
+            ]);
+        }
         return $stmt->fetchColumn() !== false;
     }
 
@@ -354,15 +417,28 @@ SQL;
      * @param string   $updatedAt 更新时间
      * @return void
      */
-    public function updateTicket(string $ticketNo, int $status, ?int $severity, ?string $adminNote, string $updatedAt): void
+    public function updateTicket(string $ticketNo, int $status, ?int $severity, ?string $adminNote, string $updatedAt, ?string $gameKey = null): void
     {
-        $stmt = $this->pdo->prepare('UPDATE feedback_tickets SET status = :status, severity = :severity, admin_note = :admin_note, updated_at = :updated_at WHERE ticket_no = :ticket_no');
+        if ($gameKey === null) {
+            $stmt = $this->pdo->prepare('UPDATE feedback_tickets SET status = :status, severity = :severity, admin_note = :admin_note, updated_at = :updated_at WHERE ticket_no = :ticket_no');
+            $stmt->execute([
+                ':status' => $status,
+                ':severity' => $severity,
+                ':admin_note' => $adminNote,
+                ':updated_at' => $updatedAt,
+                ':ticket_no' => $ticketNo,
+            ]);
+            return;
+        }
+
+        $stmt = $this->pdo->prepare('UPDATE feedback_tickets SET status = :status, severity = :severity, admin_note = :admin_note, updated_at = :updated_at WHERE ticket_no = :ticket_no AND game_key = :game_key');
         $stmt->execute([
             ':status' => $status,
             ':severity' => $severity,
             ':admin_note' => $adminNote,
             ':updated_at' => $updatedAt,
             ':ticket_no' => $ticketNo,
+            ':game_key' => $gameKey,
         ]);
     }
 }

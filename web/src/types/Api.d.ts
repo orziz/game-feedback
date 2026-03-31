@@ -19,5 +19,6 @@ interface ApiSchema {
     Auth: API.Admin.Auth.API
     Ticket: API.Admin.Ticket.API
     User: API.Admin.User.API
+    Game: API.Admin.Game.API
   }
 }

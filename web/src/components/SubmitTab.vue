@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -8,6 +9,7 @@ import { getErrorMessage, getApiError } from '../utils/errors'
 import { useAppStore } from '../stores/app'
 
 const { t } = useI18n()
+const route = useRoute()
 const submitting = ref(false)
 const appStore = useAppStore()
 const { typeOptions, severityOptions, uploadMode, uploadMaxBytes } = storeToRefs(appStore)
@@ -30,6 +32,14 @@ const detailPlaceholder = computed(() => (
   form.value.type === bugType ? t('submitForm.stepsPlaceholder') : t('submitForm.descriptionPlaceholder')
 ))
 const detailRows = computed(() => 7)
+const gameKey = computed(() => {
+  const raw = route.query.gameKey
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    return raw.trim()
+  }
+
+  return 'default'
+})
 
 const form = ref<SubmitForm>({
   type:           defaultType,
@@ -108,6 +118,7 @@ async function handleSubmit(): Promise<void> {
   try {
     const formData = new FormData()
     formData.append('type', String(form.value.type))
+    formData.append('gameKey', gameKey.value)
     formData.append('severity', String(form.value.severity))
     formData.append('title', form.value.title.trim())
     formData.append('description', form.value.description.trim())

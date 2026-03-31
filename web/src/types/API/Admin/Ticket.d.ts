@@ -19,14 +19,17 @@ declare namespace API.Admin.Ticket {
       status?: TicketStatus
       type?: FeedbackType
       keyword?: string
+      gameKey?: string
     }
 
     interface Detail {
       ticketNo: string
+      gameKey?: string
     }
 
     interface AttachmentDownload {
       ticketNo: string
+      gameKey?: string
     }
 
     interface Update {
@@ -34,11 +37,13 @@ declare namespace API.Admin.Ticket {
       status: TicketStatus
       severity: Severity | null
       adminNote: string
+      gameKey?: string
     }
   }
 }
 
 interface TicketRecord {
+  game_key?: string
   ticket_no: string
   type: FeedbackType
   severity: Severity | null
