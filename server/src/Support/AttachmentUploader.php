@@ -148,45 +148,47 @@ final class AttachmentUploader
 
         $key = 'feedback/' . date('Y/m') . '/' . date('YmdHis') . '_' . bin2hex(random_bytes(8)) . '.' . $extension;
         $deadline = time() + 3600;
-        $uploadHost = trim((string)($this->dbConfig['qiniu_upload_host'] ?? 'https://up.qiniup.com'));
-        if ($uploadHost === '') {
-            $uploadHost = 'https://up.qiniup.com';
-        }
+        $uploadHosts = $this->buildQiniuUploadHosts();
 
         $scopes = [$bucket . ':' . $key, $bucket];
         $lastHttpCode = 0;
         $lastError = '';
+        $curlErrors = [];
 
-        foreach ($scopes as $scope) {
-            $uploadToken = $this->buildQiniuUploadToken($accessKey, $secretKey, $scope, $deadline);
-            $result = $this->postQiniuUpload($uploadHost, $uploadToken, $key, $tmpName, $mime);
+        foreach ($uploadHosts as $uploadHost) {
+            foreach ($scopes as $scope) {
+                $uploadToken = $this->buildQiniuUploadToken($accessKey, $secretKey, $scope, $deadline);
+                $result = $this->postQiniuUpload($uploadHost, $uploadToken, $key, $tmpName, $mime);
 
-            if ($result['curlError'] !== '') {
-                Responder::error('QINIU_UPLOAD_FAILED', 'cURL error (' . $result['curlErrno'] . '): ' . $result['curlError'], 500);
-            }
+                if ($result['curlError'] !== '') {
+                    $curlErrors[] = 'host=' . $uploadHost . ', curl(' . $result['curlErrno'] . '): ' . $result['curlError'];
+                    continue;
+                }
 
-            if ($result['httpCode'] >= 200 && $result['httpCode'] < 300) {
-                return $key;
-            }
+                if ($result['httpCode'] >= 200 && $result['httpCode'] < 300) {
+                    return $key;
+                }
 
-            $lastHttpCode = (int)$result['httpCode'];
-            $responseData = @json_decode((string)$result['response'], true);
-            if (is_array($responseData) && isset($responseData['error'])) {
-                $lastError = (string)$responseData['error'];
-            } else {
-                $lastError = (string)$result['response'];
-            }
+                $lastHttpCode = (int)$result['httpCode'];
+                $responseData = @json_decode((string)$result['response'], true);
+                if (is_array($responseData) && isset($responseData['error'])) {
+                    $lastError = (string)$responseData['error'];
+                } else {
+                    $lastError = (string)$result['response'];
+                }
 
-            if (strpos($lastError, 'bad token') === false) {
-                break;
+                if (strpos($lastError, 'bad token') === false) {
+                    break;
+                }
             }
         }
 
         $diagnostic = ' [deadline=' . (string)$deadline
             . ', now=' . (string)time()
             . ', ak_tail=' . substr($accessKey, -6)
-            . ', host=' . $uploadHost
+            . ', hosts=' . implode('|', $uploadHosts)
             . ', scope_try=' . implode('|', $scopes)
+            . ($curlErrors !== [] ? ', curl_errors=' . implode(' || ', $curlErrors) : '')
             . ']';
 
         Responder::error('QINIU_UPLOAD_FAILED', 'Qiniu upload failed (HTTP ' . $lastHttpCode . '): ' . $lastError . $diagnostic, 500);
@@ -233,11 +235,22 @@ final class AttachmentUploader
             'file' => new CURLFile($tmpName, $mime, basename($key)),
         ];
 
+        $connectTimeout = (int)($this->dbConfig['qiniu_connect_timeout'] ?? 8);
+        $uploadTimeout = (int)($this->dbConfig['qiniu_upload_timeout'] ?? 45);
+        if ($connectTimeout <= 0) {
+            $connectTimeout = 8;
+        }
+        if ($uploadTimeout <= 0) {
+            $uploadTimeout = 45;
+        }
+
         $options = [
             CURLOPT_POST => true,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_POSTFIELDS => $postFields,
-            CURLOPT_TIMEOUT => 30,
+            CURLOPT_CONNECTTIMEOUT => $connectTimeout,
+            CURLOPT_TIMEOUT => $uploadTimeout,
+            CURLOPT_NOSIGNAL => true,
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
         ];
@@ -260,6 +273,48 @@ final class AttachmentUploader
             'curlError' => $curlError,
             'curlErrno' => $curlErrno,
         ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function buildQiniuUploadHosts(): array
+    {
+        $configured = trim((string)($this->dbConfig['qiniu_upload_host'] ?? ''));
+        $hosts = [];
+
+        if ($configured !== '') {
+            $parts = preg_split('/[\s,;]+/', $configured) ?: [];
+            foreach ($parts as $part) {
+                $host = trim($part);
+                if ($host === '') {
+                    continue;
+                }
+
+                if (strpos($host, 'http://') !== 0 && strpos($host, 'https://') !== 0) {
+                    $host = 'https://' . $host;
+                }
+
+                $hosts[] = rtrim($host, '/');
+            }
+        }
+
+        $defaults = [
+            'https://up.qiniup.com',
+            'https://up-z0.qiniup.com',
+            'https://up-z1.qiniup.com',
+            'https://up-z2.qiniup.com',
+            'https://up-na0.qiniup.com',
+            'https://up-as0.qiniup.com',
+        ];
+
+        foreach ($defaults as $defaultHost) {
+            if (!in_array($defaultHost, $hosts, true)) {
+                $hosts[] = $defaultHost;
+            }
+        }
+
+        return $hosts;
     }
 
     /**

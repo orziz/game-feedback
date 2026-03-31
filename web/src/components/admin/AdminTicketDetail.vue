@@ -29,6 +29,16 @@ async function handleDownloadAttachment(ticket: TicketRecord): Promise<void> {
 
   try {
     const blob = await api.admin.Ticket.getBlob.attachmentDownload({ ticketNo: ticket.ticket_no })
+    if (blob.type.includes('application/json')) {
+      const text = await blob.text()
+      const payload = JSON.parse(text) as Partial<ApiResponseBase>
+      throw new Error(payload.message || t('messages.attachmentDownloadFailed'))
+    }
+
+    if (blob.size === 0) {
+      throw new Error(t('messages.attachmentDownloadFailed'))
+    }
+
     triggerBlobDownload(blob, attachmentName || `attachment-${ticket.ticket_no}`)
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('messages.attachmentDownloadFailed')))

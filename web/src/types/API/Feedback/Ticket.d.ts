@@ -3,6 +3,9 @@ declare namespace API.Feedback.Ticket {
     get: {
       search: API.Meta.Get<HttpParams.Search, TicketSearchResponse>
     }
+    post: {
+      submit: API.Meta.Post<HttpParams.SubmitJson, SubmitResponse>
+    }
     postForm: {
       submit: API.Meta.PostForm<HttpParams.Submit, SubmitResponse>
     }
@@ -15,7 +18,18 @@ declare namespace API.Feedback.Ticket {
       pageSize?: number
     }
 
-    type Submit = FormData
+    type Submit = FormData | {
+      formData: FormData
+      params?: API.Meta.QueryParams
+    }
+
+    interface SubmitJson {
+      type: FeedbackType
+      severity: Severity
+      title: string
+      description: string
+      contact: string
+    }
   }
 }
 

@@ -8,6 +8,20 @@ type InternalRequestOptions = {
   responseType?: 'json' | 'blob'
 }
 
+type PostFormPayloadWithParams = {
+  formData: FormData
+  params?: API.Meta.QueryParams
+}
+
+function isPostFormPayloadWithParams(payload: unknown): payload is PostFormPayloadWithParams {
+  if (!payload || typeof payload !== 'object') {
+    return false
+  }
+
+  const candidate = payload as { formData?: unknown }
+  return typeof FormData !== 'undefined' && candidate.formData instanceof FormData
+}
+
 let tokenGetter: (() => string) | null = null
 
 const METHOD_CONFIG: Record<ApiMethodKey, { httpMethod: 'GET' | 'POST'; responseType: 'json' | 'blob' }> = {
@@ -67,6 +81,14 @@ function normalizeRequestOptions(methodKey: ApiMethodKey, payload: unknown): Int
   }
 
   if (methodKey === 'postForm') {
+    if (isPostFormPayloadWithParams(payload)) {
+      return {
+        params: payload.params ?? {},
+        body: payload.formData,
+        responseType: METHOD_CONFIG[methodKey].responseType,
+      }
+    }
+
     return {
       body: payload instanceof FormData ? payload : new FormData(),
       responseType: METHOD_CONFIG[methodKey].responseType,

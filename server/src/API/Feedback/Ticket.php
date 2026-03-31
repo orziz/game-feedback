@@ -31,7 +31,30 @@ final class Ticket extends BaseApiSubModule
 
     protected function submit(): void
     {
-        $payload = Request::isMultipartFormData() ? Request::formBody() : Request::jsonBody();
+        $formPayload = Request::formBody();
+        if (Request::isMultipartFormData()) {
+            $contentLength = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+            $postMaxBytes = $this->iniSizeToBytes((string)ini_get('post_max_size'));
+            if ($contentLength > 0 && $postMaxBytes > 0 && $contentLength > $postMaxBytes) {
+                Responder::error('UPLOAD_BODY_TOO_LARGE', '上传内容超过服务器限制，请压缩附件后重试。', 413);
+            }
+
+            if ($formPayload !== []) {
+                $payload = $formPayload;
+            } else {
+                // Some Nginx/PHP-FPM environments may drop multipart text fields.
+                // Fallback to query params to keep attachment submit usable.
+                $payload = [
+                    'type' => Request::query('type'),
+                    'severity' => Request::query('severity'),
+                    'title' => Request::query('title'),
+                    'description' => Request::query('description'),
+                    'contact' => Request::query('contact'),
+                ];
+            }
+        } else {
+            $payload = $formPayload !== [] ? $formPayload : Request::jsonBody();
+        }
 
         $type = TicketType::tryFrom((int)($payload['type'] ?? -1));
         $severity = TicketSeverity::tryFrom((int)($payload['severity'] ?? -1));
@@ -143,5 +166,37 @@ final class Ticket extends BaseApiSubModule
         );
 
         return $ticket;
+    }
+
+    private function iniSizeToBytes(string $value): int
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return 0;
+        }
+
+        $unit = strtolower(substr($value, -1));
+        if ($unit >= '0' && $unit <= '9') {
+            return (int)$value;
+        }
+
+        $number = (float)substr($value, 0, -1);
+        if ($number <= 0) {
+            return 0;
+        }
+
+        if ($unit === 'g') {
+            return (int)($number * 1024 * 1024 * 1024);
+        }
+
+        if ($unit === 'm') {
+            return (int)($number * 1024 * 1024);
+        }
+
+        if ($unit === 'k') {
+            return (int)($number * 1024);
+        }
+
+        return (int)$number;
     }
 }

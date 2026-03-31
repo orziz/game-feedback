@@ -106,17 +106,39 @@ async function handleSubmit(): Promise<void> {
 
   submitting.value = true
   try {
-    const formData = new FormData()
-    formData.append('type', String(form.value.type))
-    formData.append('severity', String(form.value.severity))
-    formData.append('title', form.value.title.trim())
-    formData.append('description', form.value.description.trim())
-    formData.append('contact', form.value.contact.trim())
+    const title = form.value.title.trim()
+    const description = form.value.description.trim()
+    const contact = form.value.contact.trim()
+
+    let data: SubmitResponse
     if (form.value.attachmentFile) {
+      const formData = new FormData()
+      formData.append('type', String(form.value.type))
+      formData.append('severity', String(form.value.severity))
+      formData.append('title', title)
+      formData.append('description', description)
+      formData.append('contact', contact)
       formData.append('attachment', form.value.attachmentFile)
+      data = await api.feedback.Ticket.postForm.submit({
+        formData,
+        params: {
+          type: form.value.type,
+          severity: form.value.severity,
+          title,
+          description,
+          contact,
+        },
+      })
+    } else {
+      data = await api.feedback.Ticket.post.submit({
+        type: form.value.type,
+        severity: form.value.severity,
+        title,
+        description,
+        contact,
+      })
     }
 
-    const data = await api.feedback.Ticket.postForm.submit(formData)
     await ElMessageBox.alert(
       t('messages.submitSuccessBody', { ticketNo: data.ticketNo }),
       t('messages.submitSuccessTitle'),

@@ -4,9 +4,20 @@ export function triggerBlobDownload(blob: Blob, filename: string): void {
 
   link.href = objectUrl
   link.download = filename
+  link.style.display = 'none'
   document.body.appendChild(link)
-  link.click()
+
+  // Safari/iOS may ignore the download attribute for blob URLs.
+  if (typeof link.download === 'string') {
+    link.click()
+  } else {
+    window.open(objectUrl, '_blank')
+  }
+
   link.remove()
 
-  URL.revokeObjectURL(objectUrl)
+  // Revoke asynchronously to avoid cancelling downloads in some browsers.
+  window.setTimeout(() => {
+    URL.revokeObjectURL(objectUrl)
+  }, 1000)
 }
