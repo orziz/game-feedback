@@ -1,20 +1,23 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
-import { getStatusTagType, getFeedbackTypeTagType } from '@/i18n'
 import { getErrorMessage } from '@/utils/errors'
-import { useAppStore } from '@/stores/app'
 import TicketProgress from './TicketProgress.vue'
+import TicketMetaTag from '@/components/shared/TicketMetaTag.vue'
 
 const { t } = useI18n()
-const appStore = useAppStore()
 const keyword   = ref('')
 const searching = ref(false)
 const results   = ref<TicketSearchResponse['tickets']>([])
 const total     = ref(0)
 const expandedTicketNos = ref<string[]>([])
+const hasSearched = ref(false)
+
+watch(keyword, () => {
+  hasSearched.value = false
+})
 
 function isTicketNoKeyword(value: string): boolean {
   return /^FB\d{8}[A-F0-9]{6}$/.test(value)
@@ -26,6 +29,7 @@ async function handleSearch(): Promise<void> {
     return
   }
   const trimmedKeyword = keyword.value.trim()
+  hasSearched.value = true
 
   searching.value = true
   results.value   = []
@@ -43,13 +47,6 @@ async function handleSearch(): Promise<void> {
   } finally {
     searching.value = false
   }
-}
-
-function severityClass(severity: Severity): string {
-  if (severity === 0) return 'severity-badge--low'
-  if (severity === 1) return 'severity-badge--medium'
-  if (severity === 2) return 'severity-badge--high'
-  return 'severity-badge--critical'
 }
 
 function statusToneClass(status: TicketStatus): string {
@@ -90,7 +87,7 @@ function toggleExpanded(ticketNo: string): void {
   </p>
 
   <el-empty
-    v-if="!searching && keyword && results.length === 0"
+    v-if="!searching && hasSearched && results.length === 0"
     :description="t('solutionSearch.empty')"
   />
 
@@ -117,9 +114,7 @@ function toggleExpanded(ticketNo: string): void {
           </div>
 
           <div class="solution-search__card-side">
-            <el-tag :type="getStatusTagType(item.status)" effect="dark" size="small" round class="solution-search__collapse-tag">
-              {{ appStore.getStatusLabel(item.status) }}
-            </el-tag>
+            <TicketMetaTag kind="status" :value="item.status" effect="dark" round class="solution-search__collapse-tag" />
             <span class="solution-search__card-arrow" :class="{ 'is-expanded': isExpanded(item.ticket_no) }"></span>
           </div>
         </div>
@@ -138,18 +133,14 @@ function toggleExpanded(ticketNo: string): void {
               <div class="ticket-field">
                 <span class="ticket-field__label">{{ t('common.type') }}</span>
                 <div class="ticket-field__value">
-                  <el-tag :type="getFeedbackTypeTagType(item.type)" effect="light" size="small">
-                    {{ appStore.getTypeLabel(item.type) }}
-                  </el-tag>
+                  <TicketMetaTag kind="type" :value="item.type" />
                 </div>
               </div>
 
               <div v-if="item.severity !== null" class="ticket-field">
                 <span class="ticket-field__label">{{ t('common.severity') }}</span>
                 <div class="ticket-field__value">
-                  <span class="severity-badge" :class="severityClass(item.severity)">
-                    {{ appStore.getSeverityLabel(item.severity) }}
-                  </span>
+                  <TicketMetaTag kind="severity" :value="item.severity" />
                 </div>
               </div>
 
@@ -310,44 +301,6 @@ function toggleExpanded(ticketNo: string): void {
   margin: 0 0 18px;
 }
 
-.ticket-field {
-  display: grid;
-  grid-template-columns: 92px minmax(0, 1fr);
-  gap: 14px;
-  align-items: center;
-}
-
-.ticket-field__label {
-  color: var(--ink-soft);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.ticket-field__value {
-  min-width: 0;
-  color: var(--ink);
-}
-
-.ticket-section {
-  display: grid;
-  grid-template-columns: 92px minmax(0, 1fr);
-  gap: 14px;
-  padding-top: 16px;
-  margin-top: 16px;
-  border-top: 1px solid rgba(226, 232, 240, 0.92);
-}
-
-.ticket-section--note {
-  background: linear-gradient(180deg, rgba(247, 250, 252, 0), rgba(248, 250, 252, 0.85));
-}
-
-.ticket-section__label {
-  color: var(--ink-soft);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
 
 .ticket-section__body {
   min-width: 0;

@@ -43,11 +43,32 @@ final class Status extends BaseApiSubModule
             $uploadMaxBytes = 5 * 1024 * 1024;
         }
 
+        $systemVersion = $this->normalizeSystemVersion((string)($this->appConfig['app_version'] ?? '1.0.0'));
+
         Responder::send([
             'ok' => true,
             'installed' => $this->installed,
             'uploadMode' => (string)($this->dbConfig['upload_mode'] ?? 'off'),
             'uploadMaxBytes' => $uploadMaxBytes,
+            'systemVersion' => $systemVersion,
         ]);
+    }
+
+    private function normalizeSystemVersion(string $version): string
+    {
+        $trimmed = trim($version);
+        if ($trimmed === '') {
+            return '1.0.0';
+        }
+
+        if (preg_match('/^(\d+)\.(\d+)\.(\d+)$/', $trimmed) === 1) {
+            return $trimmed;
+        }
+
+        if (preg_match('/^(\d+)$/', $trimmed, $matches) === 1) {
+            return $matches[1] . '.0.0';
+        }
+
+        return '1.0.0';
     }
 }

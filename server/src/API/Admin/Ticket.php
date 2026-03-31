@@ -21,6 +21,9 @@ final class Ticket extends AdminSubModule
             'list' => [
                 'methods' => ['GET'],
             ],
+            'assignees' => [
+                'methods' => ['GET'],
+            ],
             'detail' => [
                 'methods' => ['GET'],
             ],
@@ -45,9 +48,11 @@ final class Ticket extends AdminSubModule
 
         $statusRaw = Request::query('status');
         $statusEnum = $statusRaw !== '' ? TicketStatus::tryFrom((int)$statusRaw) : null;
+        $status = $statusEnum !== null ? $statusEnum : null;
 
         $typeRaw = Request::query('type');
         $typeEnum = $typeRaw !== '' ? TicketType::tryFrom((int)$typeRaw) : null;
+        $type = $typeEnum !== null ? $typeEnum : null;
 
         $assignedToRaw = Request::query('assignedTo');
         $assignedTo = $assignedToRaw !== '' ? $this->sanitizer->parseInt($assignedToRaw, 1, 9999999999) : null;
@@ -56,7 +61,7 @@ final class Ticket extends AdminSubModule
         $page = $this->sanitizer->parseInt(Request::query('page', '1'), 1, 100000);
         $pageSize = $this->sanitizer->parseInt(Request::query('pageSize', '20'), 5, 100);
 
-        $result = $this->createTicketRepository()->listTickets($statusEnum, $typeEnum, $keyword, $assignedTo, $page, $pageSize);
+        $result = $this->createTicketRepository()->listTickets($status, $type, $keyword, $assignedTo, $page, $pageSize);
 
         Responder::send([
             'ok' => true,
@@ -94,9 +99,19 @@ final class Ticket extends AdminSubModule
         ]);
     }
 
-    protected function update(): void
+    protected function assignees(): void
     {
         $this->ensureAdmin();
+
+        Responder::send([
+            'ok' => true,
+            'users' => $this->createUserRepository()->listAssignableUsers(),
+        ]);
+    }
+
+    protected function update(): void
+    {
+        $currentUser = $this->ensureAdmin();
 
         $payload = Request::jsonBody();
         $ticketNo = $this->sanitizer->sanitizeSingleLine((string)($payload['ticketNo'] ?? ''), 32);
@@ -128,10 +143,11 @@ final class Ticket extends AdminSubModule
             $safeSeverity = $severity;
         }
 
+        $statusValue = $status;
         $updatedAt = date('Y-m-d H:i:s');
         $repo->updateTicket(
             $ticketNo,
-            $status,
+            $statusValue,
             $safeSeverity,
             $adminNote !== '' ? $adminNote : null,
             $updatedAt
@@ -139,14 +155,15 @@ final class Ticket extends AdminSubModule
 
         // 记录状态变更
         $oldStatus = (int)($ticket['status'] ?? 0);
-        if ($oldStatus !== $status) {
+        $newStatusValue = $statusValue instanceof TicketStatus ? $statusValue->value : (int)$statusValue;
+        if ($oldStatus !== $newStatusValue) {
             $repo->recordOperation(
                 $ticketNo,
-                (int)$this->currentUser['id'],
-                (string)$this->currentUser['username'],
+                (int)$currentUser['id'],
+                (string)$currentUser['username'],
                 'status_change',
                 (string)$oldStatus,
-                (string)$status
+                (string)$newStatusValue
             );
         }
 
@@ -268,7 +285,7 @@ final class Ticket extends AdminSubModule
 
     protected function assign(): void
     {
-        $this->ensureAdmin();
+        $currentUser = $this->ensureAdmin();
 
         $payload = Request::jsonBody();
         $ticketNo = $this->sanitizer->sanitizeSingleLine((string)($payload['ticketNo'] ?? ''), 32);
@@ -290,9 +307,10 @@ final class Ticket extends AdminSubModule
             Responder::error('TICKET_NOT_FOUND', '工单不存在。', 404);
         }
 
+        $userRepo = $this->createUserRepository();
+
         // 验证指派的用户存在（如果有指定用户）
         if ($assignToId !== null) {
-            $userRepo = new \GameFeedback\Repository\UserRepository($this->getPdo());
             $user = $userRepo->findById($assignToId);
             if (!$user) {
                 Responder::error('USER_NOT_FOUND', '指派的用户不存在。', 404);
@@ -303,17 +321,30 @@ final class Ticket extends AdminSubModule
         }
 
         $oldAssignedTo = (int)($ticket['assigned_to'] ?? 0);
+        $oldAssignedLabel = null;
+        if ($oldAssignedTo > 0) {
+            $oldAssignee = $userRepo->findById($oldAssignedTo);
+            $oldAssigneeUsername = $oldAssignee ? (string)($oldAssignee['username'] ?? '') : '';
+            $oldAssignedLabel = $oldAssigneeUsername !== ''
+                ? $oldAssigneeUsername . ' (#' . $oldAssignedTo . ')'
+                : '用户#' . $oldAssignedTo;
+        }
+
+        $newAssignedLabel = $assignToId !== null
+            ? ($assignedUsername !== '' ? $assignedUsername . ' (#' . $assignToId . ')' : '用户#' . $assignToId)
+            : '未指派';
+
         $updatedAt = date('Y-m-d H:i:s');
         $repo->assignTicket($ticketNo, $assignToId, $updatedAt);
 
         // 记录指派操作
         $repo->recordOperation(
             $ticketNo,
-            (int)$this->currentUser['id'],
-            (string)$this->currentUser['username'],
+            (int)$currentUser['id'],
+            (string)$currentUser['username'],
             'assign',
-            $oldAssignedTo > 0 ? (string)$oldAssignedTo : null,
-            $assignToId !== null ? (string)$assignToId : ''
+            $oldAssignedLabel,
+            $newAssignedLabel
         );
 
         Responder::send([

@@ -26,4 +26,6 @@ interface InstallStatusResponse extends ApiResponseBase {
   uploadMode?: UploadMode
   /** 当前上传大小上限（字节）。 */
   uploadMaxBytes?: number
+  /** 当前系统版本（语义化版本号 x.y.z）。 */
+  systemVersion?: string
 }

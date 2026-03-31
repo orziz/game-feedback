@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace GameFeedback\Support;
 
 use GameFeedback\Enums\UserRole;
-use GameFeedback\Repository\TicketRepository;
 use GameFeedback\Repository\UserRepository;
 
 final class SystemInstaller
@@ -77,12 +76,11 @@ final class SystemInstaller
         }
 
         $pdo = Database::createPdo($host, $port, $database, $username, $password);
+        $schemaMigrationManager = new SchemaMigrationManager($pdo);
 
-        $repo = new TicketRepository($pdo);
-        $repo->createTableIfNotExists();
+        $schemaMigrationManager->installLatestSchema();
 
         $userRepo = new UserRepository($pdo);
-        $userRepo->createTableIfNotExists();
 
         $existing = $userRepo->findByUsername($adminUsername);
         if (!$existing) {
@@ -112,6 +110,7 @@ final class SystemInstaller
             'curl_use_native_ca' => $curlUseNativeCa,
             'curl_ca_file' => $curlCaFile,
             'curl_ca_path' => $curlCaPath,
+            'schema_version' => SchemaMigrationManager::CURRENT_SCHEMA_VERSION,
         ];
 
         Database::writeConfig($this->databaseConfigPath, $databaseConfig);

@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { api } from '@/api/client'
 import { useAdminStore } from '@/stores/admin'
 import { storeToRefs } from 'pinia'
+import { getErrorMessage } from '@/utils/errors'
 
 const { t } = useI18n()
 const adminStore = useAdminStore()
-const { users, usersLoading } = storeToRefs(adminStore)
+const { usersLoading } = storeToRefs(adminStore)
 
 const showCreateDialog = ref(false)
 const newUsername = ref('')
@@ -19,19 +21,40 @@ const resetUserId = ref(0)
 const resetUsername = ref('')
 const resetNewPassword = ref('')
 
+const users = ref<AdminUser[]>([])
+
 onMounted(() => {
-  adminStore.loadUsers()
+  void loadUsers()
 })
+
+async function loadUsers(): Promise<void> {
+  try {
+    adminStore.usersLoading = true
+    const data = await api.admin.User.get.list()
+    users.value = data.users
+    adminStore.users = users.value
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, t('messages.userLoadFailed')))
+  } finally {
+    adminStore.usersLoading = false
+  }
+}
 
 async function handleCreate(): Promise<void> {
   try {
-    await adminStore.addUser(newUsername.value.trim(), newPassword.value, newRole.value)
+    await api.admin.User.post.create({
+      username: newUsername.value.trim(),
+      password: newPassword.value,
+      role: newRole.value,
+    })
+    ElMessage.success(t('messages.userCreateSuccess'))
     showCreateDialog.value = false
     newUsername.value = ''
     newPassword.value = ''
     newRole.value = 'admin'
-  } catch {
-    // error already shown by store
+    await loadUsers()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, t('messages.userCreateFailed')))
   }
 }
 
@@ -42,9 +65,13 @@ async function handleDelete(user: AdminUser): Promise<void> {
       t('admin.userDeleteTitle'),
       { confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel'), type: 'warning' },
     )
-    await adminStore.removeUser(user.id)
-  } catch {
-    // cancelled or error
+    await api.admin.User.post.delete({ id: user.id })
+    ElMessage.success(t('messages.userDeleteSuccess'))
+    await loadUsers()
+  } catch (error: any) {
+    if (error?.message !== 'User cancelled confirmation') {
+      ElMessage.error(getErrorMessage(error, t('messages.userDeleteFailed')))
+    }
   }
 }
 
@@ -57,10 +84,11 @@ function openResetDialog(user: AdminUser): void {
 
 async function handleResetPassword(): Promise<void> {
   try {
-    await adminStore.resetPassword(resetUserId.value, resetNewPassword.value)
+    await api.admin.User.post.resetPassword({ id: resetUserId.value, password: resetNewPassword.value })
+    ElMessage.success(t('messages.userResetPasswordSuccess'))
     showResetDialog.value = false
-  } catch {
-    // error already shown by store
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, t('messages.userResetPasswordFailed')))
   }
 }
 
@@ -77,7 +105,7 @@ function roleLabel(role: string): string {
       </el-button>
     </div>
 
-    <el-table :data="users" v-loading="usersLoading" stripe style="width: 100%">
+    <el-table :data="users" :v-loading="adminStore.usersLoading" stripe style="width: 100%">
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="username" :label="t('admin.usernameCol')" />
       <el-table-column :label="t('admin.roleCol')" width="140">

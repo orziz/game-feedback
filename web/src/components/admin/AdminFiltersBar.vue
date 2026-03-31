@@ -26,7 +26,7 @@ const { t } = useI18n()
 const appStore = useAppStore()
 const adminStore = useAdminStore()
 const { statusOptions, typeOptions } = storeToRefs(appStore)
-const { users } = storeToRefs(adminStore)
+const { assignees } = storeToRefs(adminStore)
 
 const statusModel = computed({
   get: () => props.statusFilter,
@@ -99,7 +99,7 @@ const keywordModel = computed({
         @change="emit('refresh')"
       >
         <el-option
-          v-for="u in users"
+          v-for="u in assignees"
           :key="u.id"
           :label="u.username"
           :value="u.id"
@@ -159,7 +159,7 @@ const keywordModel = computed({
 .admin-filters {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 

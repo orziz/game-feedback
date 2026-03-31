@@ -96,6 +96,17 @@ SQL;
     }
 
     /**
+     * 获取可用于工单指派的用户列表
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function listAssignableUsers(): array
+    {
+        $stmt = $this->pdo->query('SELECT id, username FROM admin_users ORDER BY id ASC');
+        return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+    }
+
+    /**
      * 删除用户（不允许删除超级管理员）
      *
      * @return bool 是否成功删除

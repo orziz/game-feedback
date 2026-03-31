@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace GameFeedback\Support;
 
 use GameFeedback\Enums\UserRole;
-use GameFeedback\Repository\TicketRepository;
 use GameFeedback\Repository\UserRepository;
 
 
@@ -24,31 +23,44 @@ final class UserSystemMigrator
      */
     public static function migrate(array $dbConfig, string $databaseConfigPath): array
     {
+        $legacyHash = (string)($dbConfig['admin_password_hash'] ?? '');
         $hasAppSecret = isset($dbConfig['app_secret']) && (string)$dbConfig['app_secret'] !== '';
-        if ($hasAppSecret) {
-            // app_secret 已存在，只需补齐可能缺失的表结构（幂等）
-            $pdo = Database::createConfiguredPdo($dbConfig);
-            (new TicketRepository($pdo))->migrateSchema();
+        $schemaVersion = isset($dbConfig['schema_version']) ? (int)$dbConfig['schema_version'] : 0;
+        $needsSchemaMigration = $schemaVersion < SchemaMigrationManager::CURRENT_SCHEMA_VERSION;
+
+        if ($hasAppSecret && $legacyHash === '' && !$needsSchemaMigration) {
             return $dbConfig;
         }
 
         $newConfig = $dbConfig;
+        $configChanged = false;
+        $pdo = Database::createConfiguredPdo($dbConfig);
+        $schemaMigrationManager = new SchemaMigrationManager($pdo);
 
-        $legacyHash = (string)($dbConfig['admin_password_hash'] ?? '');
+        if ($needsSchemaMigration) {
+            $newConfig['schema_version'] = $schemaMigrationManager->migrateFromVersion($schemaVersion);
+            $configChanged = true;
+        }
+
         if ($legacyHash !== '') {
-            $pdo = Database::createConfiguredPdo($dbConfig);
             $userRepo = new UserRepository($pdo);
-            $userRepo->createTableIfNotExists();
 
             if (!$userRepo->hasSuperAdmin()) {
                 $userRepo->insertUser('admin', $legacyHash, UserRole::SuperAdmin);
             }
 
             unset($newConfig['admin_password_hash']);
+            $configChanged = true;
         }
 
-        $newConfig['app_secret'] = bin2hex(random_bytes(32));
-        Database::writeConfig($databaseConfigPath, $newConfig);
+        if (!$hasAppSecret) {
+            $newConfig['app_secret'] = bin2hex(random_bytes(32));
+            $configChanged = true;
+        }
+
+        if ($configChanged) {
+            Database::writeConfig($databaseConfigPath, $newConfig);
+        }
 
         return $newConfig;
     }

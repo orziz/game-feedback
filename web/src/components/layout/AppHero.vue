@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 const props = defineProps<{
   installed: boolean
+  systemVersion: string
   locale: LocaleCode
 }>()
 
@@ -35,6 +36,10 @@ function goAdmin(): void {
       <div class="hero-banner__topbar">
         <div>
           <p class="hero-banner__eyebrow">{{ t('hero.eyebrow') }}</p>
+          <div class="hero-banner__version-pill" :title="t('hero.versionTitle')">
+            <span class="hero-banner__version-label">{{ t('hero.versionLabel') }}</span>
+            <strong class="hero-banner__version-value">{{ props.systemVersion }}</strong>
+          </div>
         </div>
 
         <div class="hero-banner__locale" :aria-label="t('common.language')">
@@ -60,8 +65,8 @@ function goAdmin(): void {
       <div class="hero-banner__body hero-banner__body--compact">
         <div class="hero-banner__copy">
           <h1>{{ t('hero.title') }}</h1>
-          <p v-if="!isAdminRoute" class="hero-banner__subtitle hero-banner__subtitle--compact">
-            {{ installed ? t('hero.installedSubtitle') : t('hero.setupSubtitle') }}
+          <p v-if="!isAdminRoute && !installed" class="hero-banner__subtitle hero-banner__subtitle--compact">
+            {{ t('hero.setupSubtitle') }}
           </p>
         </div>
 
@@ -154,6 +159,32 @@ function goAdmin(): void {
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: rgba(247, 251, 255, 0.8);
+}
+
+.hero-banner__version-pill {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background:
+    linear-gradient(120deg, rgba(255, 246, 223, 0.96) 0%, rgba(224, 254, 246, 0.95) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.56);
+  box-shadow: 0 8px 24px rgba(13, 71, 84, 0.28);
+}
+
+.hero-banner__version-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #1d5a60;
+}
+
+.hero-banner__version-value {
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 14px;
+  color: #0d3f4a;
 }
 
 .hero-banner__locale {
@@ -255,6 +286,19 @@ function goAdmin(): void {
   letter-spacing: 0.16em;
 }
 
+.hero-banner--compact .hero-banner__version-pill {
+  margin-top: 6px;
+  padding: 5px 10px;
+}
+
+.hero-banner--compact .hero-banner__version-label {
+  font-size: 10px;
+}
+
+.hero-banner--compact .hero-banner__version-value {
+  font-size: 13px;
+}
+
 .hero-banner__body--compact {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 14px;
@@ -329,6 +373,10 @@ function goAdmin(): void {
   .hero-banner__locale {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .hero-banner__version-pill {
+    margin-top: 8px;
   }
 
   .hero-banner__locale-button {

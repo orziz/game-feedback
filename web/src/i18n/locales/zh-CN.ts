@@ -32,6 +32,8 @@ export default {
   hero: {
     eyebrow: 'Game Feedback Desk',
     title: '游戏反馈工单系统',
+    versionTitle: '当前后端系统版本',
+    versionLabel: '系统版本',
     installedSubtitle: '玩家提交问题，运营查看趋势，开发跟进处理。',
     setupSubtitle: '先完成数据库安装，系统会自动建表并生成配置，随后即可开放反馈提交、查询和后台处理。',
     readyBadge: '系统运行中',

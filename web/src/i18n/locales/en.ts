@@ -27,10 +27,13 @@ export default {
     ticketNo: 'Ticket No.',
     attachment: 'Attachment',
     none: 'None',
+    unassigned: 'Unassigned',
   },
   hero: {
     eyebrow: 'Game Feedback Desk',
     title: 'Game Feedback Desk',
+    versionTitle: 'Current backend system version',
+    versionLabel: 'Version',
     installedSubtitle: 'Players submit issues, operations reviews patterns, and developers follow through.',
     setupSubtitle: 'Finish the database setup first. The installer will create tables and config files before the desk opens.',
     readyBadge: 'System Ready',
@@ -160,7 +163,6 @@ export default {
       statusChange: 'Status Changed',
       assign: 'Assigned',
     },
-    unassigned: 'Unassigned',
   },
   status: {
     pending: 'Pending',

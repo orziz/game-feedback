@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
-import { getStatusTagType } from '@/i18n'
 import { useAppStore } from '@/stores/app'
 import { useAdminStore } from '@/stores/admin'
+import TicketMetaTag from '@/components/shared/TicketMetaTag.vue'
 import { triggerBlobDownload } from '@/utils/download'
 import { getErrorMessage } from '@/utils/errors'
 
@@ -21,21 +20,8 @@ const { t } = useI18n()
 const appStore = useAppStore()
 const adminStore = useAdminStore()
 const { severityOptions, statusOptions } = storeToRefs(appStore)
-const { users } = storeToRefs(adminStore)
+const { assignees, ticketOperations } = storeToRefs(adminStore)
 const bugType: FeedbackType = 0
-
-const operationsLoading = ref(false)
-const operations = ref<TicketOperation[]>([])
-
-// 监视 ticket 变化，自动加载操作记录
-watch(
-  () => props.ticket?.ticket_no,
-  (ticketNo) => {
-    if (ticketNo) {
-      loadOperations(ticketNo)
-    }
-  }
-)
 
 async function handleDownloadAttachment(ticket: TicketRecord): Promise<void> {
   const attachmentName = ticket.attachment_name || ''
@@ -62,27 +48,19 @@ async function handleDownloadAttachment(ticket: TicketRecord): Promise<void> {
   }
 }
 
-async function loadOperations(ticketNo: string): Promise<void> {
-  operationsLoading.value = true
-  try {
-    const data = await api.admin.Ticket.get.getOperations({ ticketNo })
-    operations.value = data.operations || []
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('messages.operationLoadFailed')))
-  } finally {
-    operationsLoading.value = false
-  }
-}
-
 function getOperationTypeLabel(opType: string): string {
   return opType === 'status_change' ? t('admin.operationType.statusChange') : t('admin.operationType.assign')
 }
 
-function formatOperationValue(opType: string, value: string): string {
-  if (opType === 'status_change') {
-    return appStore.getStatusLabel(parseInt(value) as TicketStatus)
+function parseStatusValue(value: string | null): TicketStatus | null {
+  if (!value) {
+    return null
   }
-  return value
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 3) {
+    return null
+  }
+  return parsed as TicketStatus
 }
 </script>
 
@@ -94,9 +72,7 @@ function formatOperationValue(opType: string, value: string): string {
           <p class="admin-detail-card__eyebrow">{{ t('admin.detailEyebrow') }}</p>
           <h3>{{ t('admin.detailTitle', { ticketNo: ticket.ticket_no }) }}</h3>
         </div>
-        <el-tag :type="getStatusTagType(ticket.status)" effect="dark" round>
-          {{ appStore.getStatusLabel(ticket.status) }}
-        </el-tag>
+          <TicketMetaTag kind="status" :value="ticket.status" effect="dark" round />
       </div>
     </template>
 
@@ -142,7 +118,7 @@ function formatOperationValue(opType: string, value: string): string {
         <el-form-item :label="t('admin.detailAssignedTo')">
           <el-select v-model="updateForm.assignedTo" clearable :placeholder="t('admin.assignPlaceholder')">
             <el-option
-              v-for="u in users"
+              v-for="u in assignees"
               :key="u.id"
               :label="u.username"
               :value="u.id"
@@ -181,31 +157,35 @@ function formatOperationValue(opType: string, value: string): string {
       <section v-if="ticket" class="admin-operations">
         <div class="admin-operations__header">
           <h4>{{ t('admin.operationHistory') }}</h4>
-          <el-button 
-            v-if="operations.length > 0"
-            type="primary" 
-            text 
-            size="small"
-            :loading="operationsLoading"
-            @click="loadOperations(ticket.ticket_no)"
-          >
-            {{ t('common.refresh') }}
-          </el-button>
         </div>
-        <div v-loading="operationsLoading" class="admin-operations__list">
-          <div v-if="operations.length === 0" class="admin-operations__empty">
+        <div class="admin-operations__list">
+          <div v-if="ticketOperations.length === 0" class="admin-operations__empty">
             {{ t('admin.noOperations') }}
           </div>
-          <div v-for="op in operations" :key="op.id" class="admin-operations__item">
+          <div v-for="op in ticketOperations" :key="op.id" class="admin-operations__item">
             <div class="admin-operations__time">{{ op.created_at }}</div>
             <div class="admin-operations__content">
               <span class="admin-operations__operator">{{ op.operator_username }}</span>
               <span class="admin-operations__action">{{ getOperationTypeLabel(op.operation_type) }}</span>
               <span v-if="op.old_value" class="admin-operations__old">
-                {{ t('admin.from') }} {{ formatOperationValue(op.operation_type, op.old_value) }}
+                {{ t('admin.from') }}
+                <TicketMetaTag
+                  v-if="op.operation_type === 'status_change'"
+                  kind="status"
+                  :value="parseStatusValue(op.old_value)"
+                  size="small"
+                />
+                <span v-else>{{ op.old_value }}</span>
               </span>
               <span class="admin-operations__new">
-                {{ t('admin.to') }} {{ formatOperationValue(op.operation_type, op.new_value) }}
+                {{ t('admin.to') }}
+                <TicketMetaTag
+                  v-if="op.operation_type === 'status_change'"
+                  kind="status"
+                  :value="parseStatusValue(op.new_value)"
+                  size="small"
+                />
+                <span v-else>{{ op.new_value }}</span>
               </span>
             </div>
           </div>
@@ -378,6 +358,9 @@ function formatOperationValue(opType: string, value: string): string {
 
 .admin-operations__old,
 .admin-operations__new {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: var(--ink-soft);
 }
 

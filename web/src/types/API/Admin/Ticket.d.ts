@@ -2,6 +2,7 @@ declare namespace API.Admin.Ticket {
   interface API {
     get: {
       list: API.Meta.Get<HttpParams.List, AdminListResponse>
+      assignees: API.Meta.Get<void, AdminAssigneeListResponse>
       detail: API.Meta.Get<HttpParams.Detail, AdminDetailResponse>
       getOperations: API.Meta.Get<HttpParams.GetOperations, AdminOperationsResponse>
     }
@@ -68,6 +69,11 @@ interface TicketRecord {
   updated_at: string
 }
 
+interface AdminAssigneeUser {
+  id: number
+  username: string
+}
+
 interface TicketOperation {
   id: number
   operator_id: number
@@ -88,6 +94,10 @@ interface AdminUpdateForm {
 interface AdminListResponse extends ApiResponseBase {
   tickets: TicketRecord[]
   pagination?: PaginationInfo
+}
+
+interface AdminAssigneeListResponse extends ApiResponseBase {
+  users: AdminAssigneeUser[]
 }
 
 interface AdminDetailResponse extends ApiResponseBase {

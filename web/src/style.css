@@ -278,21 +278,68 @@ body {
 
 .desk-tabs .el-tabs__header {
   margin: 0;
+  border-bottom: none;
+}
+
+.desk-tabs {
+  --tab-bg: rgba(243, 244, 246, 0.6);
+  --tab-active-bg: linear-gradient(135deg, #102735 0%, #14485b 52%, #126d69 100%);
+  --tab-active-text: #ffffff;
+  --tab-hover-bg: rgba(229, 231, 235, 0.8);
+}
+
+.desk-tabs .el-tabs__nav-wrap {
+  padding: 6px;
+  border-radius: 999px;
+  background: var(--tab-bg);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.04);
+  backdrop-filter: blur(8px);
+  display: inline-block;
+  margin-bottom: 4px;
 }
 
 .desk-tabs .el-tabs__nav-wrap::after {
-  height: 1px;
-  background: var(--line);
+  display: none;
+}
+
+.desk-tabs.el-tabs--card > .el-tabs__header {
+  border-bottom: 0;
+}
+
+.desk-tabs.el-tabs--card > .el-tabs__header .el-tabs__nav {
+  border: 0;
+  gap: 8px;
+  display: flex;
 }
 
 .desk-tabs .el-tabs__item {
-  border-radius: 14px 14px 0 0;
-  padding: 0 16px;
+  height: 42px;
+  line-height: 42px;
+  border: 0 !important;
+  border-radius: 999px;
+  padding: 0 28px !important;
+  color: var(--ink-soft);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 15px;
+  position: relative;
+  z-index: 1;
+}
+
+.desk-tabs .el-tabs__item:hover {
+  background: var(--tab-hover-bg);
+  color: var(--ink);
+  transform: translateY(-1px);
 }
 
 .desk-tabs .el-tabs__item.is-active {
-  color: var(--brand-strong);
-  background: var(--brand-soft);
+  color: var(--tab-active-text) !important;
+  background: var(--tab-active-bg);
+  box-shadow: 0 8px 16px rgba(18, 109, 105, 0.25);
+  transform: translateY(-2px);
+}
+
+.desk-tabs .el-tabs__item.is-active::after {
+  content: none;
 }
 
 .desk-tabs,
@@ -379,6 +426,24 @@ body {
   .toolbar-select,
   .toolbar-search {
     width: 100%;
+  }
+
+  .desk-tabs .el-tabs__nav-wrap {
+    padding: 5px;
+    border-radius: 14px;
+  }
+
+  .desk-tabs .el-tabs__item {
+    height: 35px;
+    line-height: 35px;
+    padding: 0 13px;
+    font-size: 13px;
+  }
+
+  .desk-tabs .el-tabs__item.is-active::after {
+    left: 10px;
+    right: 10px;
+    bottom: 5px;
   }
 
   .admin-pagination {

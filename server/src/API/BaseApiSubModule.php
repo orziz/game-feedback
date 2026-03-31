@@ -91,16 +91,13 @@ abstract class BaseApiSubModule
     protected function createTicketRepository(): TicketRepository
     {
         $repo = new TicketRepository(Database::createConfiguredPdo($this->dbConfig));
+        // 确保表结构存在并完整，包括 ticket_operations 操作记录表
         $repo->createTableIfNotExists();
-
         return $repo;
     }
 
     protected function createUserRepository(): UserRepository
     {
-        $repo = new UserRepository(Database::createConfiguredPdo($this->dbConfig));
-        $repo->createTableIfNotExists();
-
-        return $repo;
+        return new UserRepository(Database::createConfiguredPdo($this->dbConfig));
     }
 }
