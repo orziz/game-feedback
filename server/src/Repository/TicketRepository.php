@@ -63,6 +63,17 @@ SQL;
     }
 
     /**
+     * 运行所有表结构迁移（幂等，可在应用启动时重复调用）
+     *
+     * @return void
+     */
+    public function migrateSchema(): void
+    {
+        $this->migrateLegacyEnumColumnsIfNeeded();
+        $this->ensureAttachmentColumns();
+    }
+
+    /**
      * 将旧版 ENUM 类型字段迁移为 TINYINT 整数字段
      *
      * @return void
