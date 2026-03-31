@@ -53,6 +53,14 @@ abstract class BaseApiSubModule
     /** 限流配置键：封禁秒数 */
     protected const RATE_LIMIT_BLOCK_SECONDS = 'block_seconds';
 
+    /** @var array<int, string> actionMeta 允许出现的键 */
+    private const ALLOWED_META_KEYS = [
+        self::META_METHODS,
+        self::META_ALLOW_BEFORE_INSTALL,
+        self::META_RATE_LIMIT,
+        self::META_AUTH,
+    ];
+
     /** 默认限流窗口（秒） */
     protected const DEFAULT_RATE_LIMIT_WINDOW_SECONDS = 600;
 
@@ -73,6 +81,13 @@ abstract class BaseApiSubModule
 
     /** @var AppInputSanitizer */
     protected $sanitizer;
+
+    /**
+     * 规范化后的动作元数据缓存，避免单次请求重复解析/校验 actionMeta
+     *
+     * @var array<string, array<string, mixed>>|null
+     */
+    private $resolvedActionMeta = null;
 
     /**
      * 当前请求内缓存的 PDO 实例，避免同一请求多次建立数据库连接
@@ -122,14 +137,29 @@ abstract class BaseApiSubModule
      */
     abstract protected function actionMeta(): array;
 
+    /**
+     * 获取并缓存动作元数据（带结构校验与标准化）
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    protected function resolvedActionMeta(): array
+    {
+        if (is_array($this->resolvedActionMeta)) {
+            return $this->resolvedActionMeta;
+        }
+
+        $this->resolvedActionMeta = $this->validateAndNormalizeActionMeta($this->actionMeta());
+        return $this->resolvedActionMeta;
+    }
+
     public function hasActionFunction(string $functionName): bool
     {
-        return isset($this->actionMeta()[$functionName]) && method_exists($this, $functionName);
+        return isset($this->resolvedActionMeta()[$functionName]) && method_exists($this, $functionName);
     }
 
     public function allowsMethod(string $functionName, string $method): bool
     {
-        $meta = $this->actionMeta()[$functionName] ?? null;
+        $meta = $this->resolvedActionMeta()[$functionName] ?? null;
         if ($meta === null) {
             return false;
         }
@@ -139,7 +169,7 @@ abstract class BaseApiSubModule
 
     public function allowsBeforeInstall(string $functionName): bool
     {
-        $meta = $this->actionMeta()[$functionName] ?? null;
+        $meta = $this->resolvedActionMeta()[$functionName] ?? null;
         if ($meta === null) {
             return false;
         }
@@ -153,7 +183,7 @@ abstract class BaseApiSubModule
             throw new RuntimeException('Unknown function: ' . $functionName);
         }
 
-        $meta = $this->actionMeta()[$functionName] ?? [];
+        $meta = $this->resolvedActionMeta()[$functionName] ?? [];
         $this->beforeDispatch($functionName, is_array($meta) ? $meta : []);
 
         $this->{$functionName}();
@@ -228,6 +258,145 @@ abstract class BaseApiSubModule
         $key = $scope . '|' . Request::clientIp();
         $limiter->ensureAllowed($key);
         $limiter->hit($key);
+    }
+
+    /**
+     * 校验并标准化 actionMeta 结构
+     *
+     * @param array<string, mixed> $metaMap
+     * @return array<string, array<string, mixed>>
+     */
+    private function validateAndNormalizeActionMeta(array $metaMap): array
+    {
+        $normalizedMap = [];
+        foreach ($metaMap as $action => $meta) {
+            $actionName = trim((string)$action);
+            if ($actionName === '') {
+                throw new RuntimeException('actionMeta contains empty action name');
+            }
+
+            if (!method_exists($this, $actionName)) {
+                throw new RuntimeException('actionMeta [' . $actionName . '] points to undefined method');
+            }
+
+            if (!is_array($meta)) {
+                throw new RuntimeException('actionMeta for [' . $actionName . '] must be an array');
+            }
+
+            $this->assertNoUnknownMetaKeys($actionName, $meta);
+
+            $methods = $this->normalizeMethodsMeta($actionName, $meta);
+            $normalized = [
+                self::META_METHODS => $methods,
+            ];
+
+            if (array_key_exists(self::META_ALLOW_BEFORE_INSTALL, $meta)) {
+                $normalized[self::META_ALLOW_BEFORE_INSTALL] = (bool)$meta[self::META_ALLOW_BEFORE_INSTALL];
+            }
+
+            if (array_key_exists(self::META_AUTH, $meta)) {
+                $normalized[self::META_AUTH] = $this->normalizeAuthMeta($actionName, $meta[self::META_AUTH]);
+            }
+
+            if (array_key_exists(self::META_RATE_LIMIT, $meta)) {
+                $normalized[self::META_RATE_LIMIT] = $this->normalizeRateLimitMeta($actionName, $meta[self::META_RATE_LIMIT]);
+            }
+
+            $normalizedMap[$actionName] = $normalized;
+        }
+
+        return $normalizedMap;
+    }
+
+    /**
+     * 校验 actionMeta 是否包含未知键，避免拼写错误被静默忽略
+     *
+     * @param array<string, mixed> $meta
+     * @return void
+     */
+    private function assertNoUnknownMetaKeys(string $actionName, array $meta): void
+    {
+        foreach (array_keys($meta) as $key) {
+            $metaKey = (string)$key;
+            if (!in_array($metaKey, self::ALLOWED_META_KEYS, true)) {
+                throw new RuntimeException('actionMeta [' . $actionName . '] has unknown key: ' . $metaKey);
+            }
+        }
+    }
+
+    /**
+     * 标准化 methods 元数据
+     *
+     * @param array<string, mixed> $meta
+     * @return array<int, string>
+     */
+    private function normalizeMethodsMeta(string $actionName, array $meta): array
+    {
+        $methods = $meta[self::META_METHODS] ?? null;
+        if (!is_array($methods) || $methods === []) {
+            throw new RuntimeException('actionMeta [' . $actionName . '] requires non-empty methods');
+        }
+
+        $normalized = [];
+        foreach ($methods as $method) {
+            $methodName = strtoupper(trim((string)$method));
+            if ($methodName === '') {
+                continue;
+            }
+            $normalized[$methodName] = $methodName;
+        }
+
+        if ($normalized === []) {
+            throw new RuntimeException('actionMeta [' . $actionName . '] has no valid methods');
+        }
+
+        return array_values($normalized);
+    }
+
+    /**
+     * 标准化 auth 元数据
+     */
+    private function normalizeAuthMeta(string $actionName, $auth): string
+    {
+        $authValue = strtolower(trim((string)$auth));
+        if ($authValue === '') {
+            return self::AUTH_NONE;
+        }
+
+        if (!in_array($authValue, [self::AUTH_NONE, self::AUTH_ADMIN, self::AUTH_SUPER_ADMIN], true)) {
+            throw new RuntimeException('actionMeta [' . $actionName . '] has invalid auth: ' . $authValue);
+        }
+
+        return $authValue;
+    }
+
+    /**
+     * 标准化 rate_limit 元数据
+     *
+     * @param mixed $rateLimit
+     * @return array<string, int|string>
+     */
+    private function normalizeRateLimitMeta(string $actionName, $rateLimit): array
+    {
+        if (!is_array($rateLimit)) {
+            throw new RuntimeException('actionMeta [' . $actionName . '] rate_limit must be an array');
+        }
+
+        $maxAttempts = (int)($rateLimit[self::RATE_LIMIT_MAX_ATTEMPTS] ?? 0);
+        if ($maxAttempts <= 0) {
+            throw new RuntimeException('actionMeta [' . $actionName . '] rate_limit.max_attempts must be > 0');
+        }
+
+        $windowSeconds = (int)($rateLimit[self::RATE_LIMIT_WINDOW_SECONDS] ?? self::DEFAULT_RATE_LIMIT_WINDOW_SECONDS);
+        $blockSeconds = (int)($rateLimit[self::RATE_LIMIT_BLOCK_SECONDS] ?? $windowSeconds);
+        $scope = trim((string)($rateLimit[self::RATE_LIMIT_SCOPE] ?? ''));
+
+        return [
+            self::RATE_LIMIT_SCOPE => $scope,
+            self::RATE_LIMIT_MAX_ATTEMPTS => $maxAttempts,
+            self::RATE_LIMIT_WINDOW_SECONDS => max(1, $windowSeconds),
+            self::RATE_LIMIT_BLOCK_SECONDS => max(1, $blockSeconds),
+        ];
     }
 
     /**
