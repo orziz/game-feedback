@@ -35,7 +35,10 @@ function goAdmin(): void {
     <div class="hero-banner__inner">
       <div class="hero-banner__topbar">
         <div>
-          <p class="hero-banner__eyebrow">{{ t('hero.eyebrow') }}</p>
+          <p class="hero-banner__eyebrow">
+            {{ t('hero.eyebrow') }}
+            <span class="copyrigt">(repo for <a href="https://github.com/orziz/game-feedback" target="_blank">GitHub</a>)</span>
+          </p>
           <div class="hero-banner__version-pill" :title="t('hero.versionTitle')">
             <span class="hero-banner__version-label">{{ t('hero.versionLabel') }}</span>
             <strong class="hero-banner__version-value">{{ props.systemVersion }}</strong>
@@ -395,5 +398,15 @@ function goAdmin(): void {
   .hero-banner--compact .hero-banner__route-switch {
     grid-auto-flow: row;
   }
+}
+
+.copyrigt {
+  margin-left: 12px;
+  font-size: 10px;
+  color: rgba(247, 251, 255, 0.6);
+}
+.copyrigt a {
+  color: rgba(247, 251, 255, 0.8);
+  text-decoration: underline;
 }
 </style>

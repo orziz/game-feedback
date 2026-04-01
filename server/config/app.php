@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'app_name' => 'feedbackForm',
-    'app_version' => '1.4.0',
+    'app_version' => '0.1.0',
     'timezone' => 'Asia/Shanghai',
     'cors_allowed_origins' => [],
     // 是否允许来自 localhost/127.0.0.1 的跨域请求
