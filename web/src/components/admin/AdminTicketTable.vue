@@ -30,43 +30,45 @@ const bugType: FeedbackType = 0
       <p class="admin-table-shell__caption">{{ t('admin.queueDescription') }}</p>
     </div>
 
-    <el-table
-      :data="tickets"
-      stripe
-      height="100%"
-      size="small"
-      v-loading="loading"
-      class="admin-table"
-      @row-click="(row: TicketRecord) => emit('select', row.ticket_no)"
-    >
-      <el-table-column prop="ticket_no" :label="t('admin.ticketIdCol')" min-width="170" />
-      <el-table-column prop="type" :label="t('admin.typeCol')" width="92" align="center" header-align="center">
-        <template #default="{ row }">
-          <TicketMetaTag kind="type" :value="row.type" />
-        </template>
-      </el-table-column>
-      <el-table-column prop="severity" :label="t('admin.severityCol')" width="98" align="center" header-align="center">
-        <template #default="{ row }">
-          <TicketMetaTag v-if="row.type === bugType" kind="severity" :value="row.severity" />
-          <span v-else>--</span>
-        </template>
-      </el-table-column>
-      <el-table-column prop="title"    :label="t('admin.titleCol')"    min-width="220" show-overflow-tooltip />
-      <el-table-column prop="contact"  :label="t('admin.contactCol')"  min-width="160" show-overflow-tooltip />
-      <el-table-column prop="assigned_username" :label="t('admin.assignedToCol')" width="100" align="center" header-align="center">
-        <template #default="{ row }">
-          <span v-if="!row.assigned_to" class="unassigned">{{ t('common.unassigned') }}</span>
-          <span v-else class="assigned-user">{{ row.assigned_username }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column prop="status"   :label="t('admin.statusCol')"   width="100" align="center" header-align="center">
-        <template #default="{ row }">
-          <TicketMetaTag kind="status" :value="row.status" effect="dark" />
-        </template>
-      </el-table-column>
-      <el-table-column prop="created_at" :label="t('admin.createdAtCol')" width="180" />
-      <el-table-column prop="updated_at" :label="t('admin.updatedAtCol')" width="180" />
-    </el-table>
+    <div class="admin-table-shell__body">
+      <el-table
+        :data="tickets"
+        stripe
+        height="100%"
+        size="small"
+        v-loading="loading"
+        class="admin-table"
+        @row-click="(row: TicketRecord) => emit('select', row.ticket_no)"
+      >
+        <el-table-column prop="ticket_no" :label="t('admin.ticketIdCol')" min-width="170" />
+        <el-table-column prop="type" :label="t('admin.typeCol')" width="92" align="center" header-align="center">
+          <template #default="{ row }">
+            <TicketMetaTag kind="type" :value="row.type" />
+          </template>
+        </el-table-column>
+        <el-table-column prop="severity" :label="t('admin.severityCol')" width="98" align="center" header-align="center">
+          <template #default="{ row }">
+            <TicketMetaTag v-if="row.type === bugType" kind="severity" :value="row.severity" />
+            <span v-else>--</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="title"    :label="t('admin.titleCol')"    min-width="220" show-overflow-tooltip />
+        <el-table-column prop="contact"  :label="t('admin.contactCol')"  min-width="160" show-overflow-tooltip />
+        <el-table-column prop="assigned_username" :label="t('admin.assignedToCol')" width="100" align="center" header-align="center">
+          <template #default="{ row }">
+            <span v-if="!row.assigned_to" class="unassigned">{{ t('common.unassigned') }}</span>
+            <span v-else class="assigned-user">{{ row.assigned_username }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="status"   :label="t('admin.statusCol')"   width="100" align="center" header-align="center">
+          <template #default="{ row }">
+            <TicketMetaTag kind="status" :value="row.status" effect="dark" />
+          </template>
+        </el-table-column>
+        <el-table-column prop="created_at" :label="t('admin.createdAtCol')" width="180" />
+        <el-table-column prop="updated_at" :label="t('admin.updatedAtCol')" width="180" />
+      </el-table>
+    </div>
 
     <el-pagination
       class="admin-pagination"
@@ -86,9 +88,11 @@ const bugType: FeedbackType = 0
 .admin-table-shell {
   display: flex;
   flex: 1;
+  height: 100%;
   min-height: 0;
   flex-direction: column;
   gap: 14px;
+  overflow: hidden;
 }
 
 .admin-table-shell__header {
@@ -111,13 +115,25 @@ const bugType: FeedbackType = 0
 }
 
 .admin-table-shell__caption { color: var(--ink-soft); }
-.admin-table { width: 100%; }
-.admin-table {
+.admin-table-shell__body {
+  display: flex;
   flex: 1;
-  min-height: 320px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.admin-table {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
 }
 .admin-table :deep(.el-table__inner-wrapper) { height: 100%; }
-.admin-pagination { justify-content: flex-end; }
+.admin-pagination {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  margin-top: auto;
+}
 
 .unassigned {
   display: inline-block;

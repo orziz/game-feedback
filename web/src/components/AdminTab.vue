@@ -323,6 +323,7 @@ async function handleSaveTicket(): Promise<void> {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
+  overflow: hidden;
 }
 
 .admin-pane__top,
@@ -331,6 +332,7 @@ async function handleSaveTicket(): Promise<void> {
 }
 
 .admin-pane__bottom {
+  display: flex;
   overflow: hidden;
 }
 
