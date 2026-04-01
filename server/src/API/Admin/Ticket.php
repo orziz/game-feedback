@@ -13,41 +13,64 @@ use GameFeedback\Support\Responder;
 final class Ticket extends AdminSubModule
 {
     /**
-     * @return array<string, array{methods: array<int, string>, allow_before_install?: bool}>
+     * @return array<string, array{
+     *   methods: array<int, string>,
+     *   allow_before_install?: bool,
+     *   auth?: string
+     * }>
      */
     protected function actionMeta(): array
     {
         return [
             'list' => [
-                'methods' => ['GET'],
+                self::META_METHODS => ['GET'],
+                self::META_AUTH => self::AUTH_ADMIN,
+            ],
+            'assignees' => [
+                self::META_METHODS => ['GET'],
+                self::META_AUTH => self::AUTH_ADMIN,
             ],
             'detail' => [
-                'methods' => ['GET'],
+                self::META_METHODS => ['GET'],
+                self::META_AUTH => self::AUTH_ADMIN,
             ],
             'attachmentDownload' => [
-                'methods' => ['GET'],
+                self::META_METHODS => ['GET'],
+                self::META_AUTH => self::AUTH_ADMIN,
             ],
             'update' => [
-                'methods' => ['POST'],
+                self::META_METHODS => ['POST'],
+                self::META_AUTH => self::AUTH_ADMIN,
+            ],
+            'assign' => [
+                self::META_METHODS => ['POST'],
+                self::META_AUTH => self::AUTH_ADMIN,
+            ],
+            'getOperations' => [
+                self::META_METHODS => ['GET'],
+                self::META_AUTH => self::AUTH_ADMIN,
             ],
         ];
     }
 
     protected function list(): void
     {
-        $this->ensureAdmin();
-
         $statusRaw = Request::query('status');
         $statusEnum = $statusRaw !== '' ? TicketStatus::tryFrom((int)$statusRaw) : null;
+        $status = $statusEnum !== null ? $statusEnum : null;
 
         $typeRaw = Request::query('type');
         $typeEnum = $typeRaw !== '' ? TicketType::tryFrom((int)$typeRaw) : null;
+        $type = $typeEnum !== null ? $typeEnum : null;
+
+        $assignedToRaw = Request::query('assignedTo');
+        $assignedTo = $assignedToRaw !== '' ? $this->sanitizer->parseInt($assignedToRaw, 1, 9999999999) : null;
 
         $keyword = $this->sanitizer->sanitizeSingleLine(Request::query('keyword'), 120);
         $page = $this->sanitizer->parseInt(Request::query('page', '1'), 1, 100000);
         $pageSize = $this->sanitizer->parseInt(Request::query('pageSize', '20'), 5, 100);
 
-        $result = $this->createTicketRepository()->listTickets($statusEnum, $typeEnum, $keyword, $page, $pageSize);
+        $result = $this->createTicketRepository()->listTickets($status, $type, $keyword, $assignedTo, $page, $pageSize);
 
         Responder::send([
             'ok' => true,
@@ -63,27 +86,37 @@ final class Ticket extends AdminSubModule
 
     protected function detail(): void
     {
-        $this->ensureAdmin();
-
         $ticketNo = $this->sanitizer->sanitizeSingleLine(Request::query('ticketNo'), 32);
         if ($ticketNo === '' || !$this->sanitizer->isValidTicketNo($ticketNo)) {
             Responder::error('INVALID_TICKET_NO', '工单号格式不正确。', 422);
         }
 
-        $ticket = $this->createTicketRepository()->findTicketByNo($ticketNo);
+        $repo = $this->createTicketRepository();
+        $ticket = $repo->findTicketByNo($ticketNo);
         if (!$ticket) {
             Responder::error('TICKET_NOT_FOUND', '工单不存在。', 404);
         }
 
+        $operations = $repo->getTicketOperations($ticketNo);
+
         Responder::send([
             'ok' => true,
             'ticket' => $ticket,
+            'operations' => $operations,
+        ]);
+    }
+
+    protected function assignees(): void
+    {
+        Responder::send([
+            'ok' => true,
+            'users' => $this->createUserRepository()->listAssignableUsers(),
         ]);
     }
 
     protected function update(): void
     {
-        $this->ensureAdmin();
+        $currentUser = $this->currentAdminUser();
 
         $payload = Request::jsonBody();
         $ticketNo = $this->sanitizer->sanitizeSingleLine((string)($payload['ticketNo'] ?? ''), 32);
@@ -115,13 +148,28 @@ final class Ticket extends AdminSubModule
             $safeSeverity = $severity;
         }
 
+        $updatedAt = date('Y-m-d H:i:s');
         $repo->updateTicket(
             $ticketNo,
-            $status,
+            (int)$status,
             $safeSeverity,
             $adminNote !== '' ? $adminNote : null,
-            date('Y-m-d H:i:s')
+            $updatedAt
         );
+
+        // 记录状态变更
+        $oldStatus = (int)($ticket['status'] ?? 0);
+        $newStatusValue = (int)$status;
+        if ($oldStatus !== $newStatusValue) {
+            $repo->recordOperation(
+                $ticketNo,
+                (int)$currentUser['id'],
+                (string)$currentUser['username'],
+                'status_change',
+                (string)$oldStatus,
+                (string)$newStatusValue
+            );
+        }
 
         Responder::send([
             'ok' => true,
@@ -131,8 +179,6 @@ final class Ticket extends AdminSubModule
 
     protected function attachmentDownload(): void
     {
-        $this->ensureAdmin();
-
         $ticketNo = $this->sanitizer->sanitizeSingleLine(Request::query('ticketNo'), 32);
         if ($ticketNo === '' || !$this->sanitizer->isValidTicketNo($ticketNo)) {
             Responder::error('INVALID_TICKET_NO', '工单号格式不正确。', 422);
@@ -153,8 +199,15 @@ final class Ticket extends AdminSubModule
         }
 
         if ($attachmentStorage === 'local') {
-            $absolutePath = dirname(__DIR__, 3) . '/storage/uploads/' . ltrim($attachmentKey, '/');
-            if (!is_file($absolutePath)) {
+            // 使用 realpath 校验最终路径必须在 uploads 目录内，防止路径穿越
+            $uploadsBasePath = realpath(dirname(__DIR__, 3) . '/storage/uploads');
+            $absolutePath = realpath(dirname(__DIR__, 3) . '/storage/uploads/' . ltrim($attachmentKey, '/'));
+            if (
+                $uploadsBasePath === false
+                || $absolutePath === false
+                || strncmp($absolutePath, $uploadsBasePath . DIRECTORY_SEPARATOR, strlen($uploadsBasePath) + 1) !== 0
+                || !is_file($absolutePath)
+            ) {
                 Responder::error('ATTACHMENT_NOT_FOUND', '附件文件不存在。', 404);
             }
 
@@ -175,7 +228,7 @@ final class Ticket extends AdminSubModule
                 Responder::error('QINIU_DOWNLOAD_FAILED', '当前环境未启用 cURL，无法下载七牛云附件。', 500);
             }
 
-            $content = null;
+            $downloadedStream = null;
             $lastHttpCode = 0;
             $lastCurlErrno = 0;
             $lastCurlError = '';
@@ -187,34 +240,47 @@ final class Ticket extends AdminSubModule
                     continue;
                 }
 
+                $bodyBuffer = fopen('php://temp', 'w+b');
+                if ($bodyBuffer === false) {
+                    curl_close($ch);
+                    Responder::error('QINIU_DOWNLOAD_FAILED', '无法初始化附件下载缓冲区。', 500);
+                }
+
                 $options = [
-                    CURLOPT_RETURNTRANSFER => true,
                     CURLOPT_FOLLOWLOCATION => true,
                     CURLOPT_TIMEOUT => 30,
+                    CURLOPT_HEADER => false,
+                    CURLOPT_RETURNTRANSFER => false,
+                    CURLOPT_FILE => $bodyBuffer,
                 ];
                 foreach ($this->buildCurlSslOptions() as $option => $value) {
                     $options[$option] = $value;
                 }
                 curl_setopt_array($ch, $options);
 
-                $response = curl_exec($ch);
+                $ok = curl_exec($ch);
                 $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
                 $curlErrno = curl_errno($ch);
                 $curlError = (string)curl_error($ch);
                 curl_close($ch);
 
-                if (is_string($response) && $curlErrno === 0 && $httpCode >= 200 && $httpCode < 300) {
-                    $content = $response;
+                rewind($bodyBuffer);
+                $responseSnippet = fread($bodyBuffer, 180);
+
+                if ($ok === true && $curlErrno === 0 && $httpCode >= 200 && $httpCode < 300) {
+                    rewind($bodyBuffer);
+                    $downloadedStream = $bodyBuffer;
                     break;
                 }
 
                 $lastHttpCode = $httpCode;
                 $lastCurlErrno = $curlErrno;
                 $lastCurlError = $curlError;
-                $lastBody = is_string($response) ? trim($response) : '';
+                $lastBody = is_string($responseSnippet) ? trim($responseSnippet) : '';
+                fclose($bodyBuffer);
             }
 
-            if (!is_string($content)) {
+            if (!is_resource($downloadedStream)) {
                 $message = '七牛云附件下载失败。';
                 if ($lastCurlErrno !== 0 && $lastCurlError !== '') {
                     $message .= ' cURL(' . $lastCurlErrno . '): ' . $lastCurlError;
@@ -229,13 +295,111 @@ final class Ticket extends AdminSubModule
                 Responder::error('QINIU_DOWNLOAD_FAILED', $message, 500);
             }
 
+            // 下载成功后再输出附件响应头，避免失败时污染错误 JSON 响应
             header('Content-Type: ' . $attachmentMime);
             header('Content-Disposition: attachment; filename="' . rawurlencode($attachmentName) . '"; filename*=UTF-8\'\'' . rawurlencode($attachmentName));
-            header('Content-Length: ' . (string)strlen($content));
-            echo $content;
+            $stat = fstat($downloadedStream);
+            if (is_array($stat) && isset($stat['size']) && (int)$stat['size'] > 0) {
+                header('Content-Length: ' . (string)((int)$stat['size']));
+            }
+            rewind($downloadedStream);
+            fpassthru($downloadedStream);
+            fclose($downloadedStream);
+
             exit;
         }
 
         Responder::error('UNSUPPORTED_STORAGE', '不支持的附件存储方式。', 500);
+    }
+
+    protected function assign(): void
+    {
+        $currentUser = $this->currentAdminUser();
+
+        $payload = Request::jsonBody();
+        $ticketNo = $this->sanitizer->sanitizeSingleLine((string)($payload['ticketNo'] ?? ''), 32);
+        $assignToId = array_key_exists('assignedTo', $payload) && $payload['assignedTo'] !== null
+            ? $this->sanitizer->parseInt((string)$payload['assignedTo'], 1, 9999999999)
+            : null;
+
+        if ($ticketNo === '') {
+            Responder::error('MISSING_TICKET_NO', '工单号不能为空。', 422);
+        }
+
+        if (!$this->sanitizer->isValidTicketNo($ticketNo)) {
+            Responder::error('INVALID_TICKET_NO', '工单号格式不正确。', 422);
+        }
+
+        $repo = $this->createTicketRepository();
+        $ticket = $repo->findTicketByNo($ticketNo);
+        if (!$ticket) {
+            Responder::error('TICKET_NOT_FOUND', '工单不存在。', 404);
+        }
+
+        $userRepo = $this->createUserRepository();
+
+        // 验证指派的用户存在（如果有指定用户）
+        if ($assignToId !== null) {
+            $user = $userRepo->findById($assignToId);
+            if (!$user) {
+                Responder::error('USER_NOT_FOUND', '指派的用户不存在。', 404);
+            }
+            $assignedUsername = (string)($user['username'] ?? '');
+        } else {
+            $assignedUsername = '';
+        }
+
+        $oldAssignedTo = (int)($ticket['assigned_to'] ?? 0);
+        $oldAssignedLabel = null;
+        if ($oldAssignedTo > 0) {
+            $oldAssignee = $userRepo->findById($oldAssignedTo);
+            $oldAssigneeUsername = $oldAssignee ? (string)($oldAssignee['username'] ?? '') : '';
+            $oldAssignedLabel = $oldAssigneeUsername !== ''
+                ? $oldAssigneeUsername . ' (#' . $oldAssignedTo . ')'
+                : '用户#' . $oldAssignedTo;
+        }
+
+        $newAssignedLabel = $assignToId !== null
+            ? ($assignedUsername !== '' ? $assignedUsername . ' (#' . $assignToId . ')' : '用户#' . $assignToId)
+            : '未指派';
+
+        $updatedAt = date('Y-m-d H:i:s');
+        $repo->assignTicket($ticketNo, $assignToId, $updatedAt);
+
+        // 记录指派操作
+        $repo->recordOperation(
+            $ticketNo,
+            (int)$currentUser['id'],
+            (string)$currentUser['username'],
+            'assign',
+            $oldAssignedLabel,
+            $newAssignedLabel
+        );
+
+        Responder::send([
+            'ok' => true,
+            'message' => '指派成功。',
+        ]);
+    }
+
+    protected function getOperations(): void
+    {
+        $ticketNo = $this->sanitizer->sanitizeSingleLine(Request::query('ticketNo'), 32);
+        if ($ticketNo === '' || !$this->sanitizer->isValidTicketNo($ticketNo)) {
+            Responder::error('INVALID_TICKET_NO', '工单号格式不正确。', 422);
+        }
+
+        $repo = $this->createTicketRepository();
+        $ticket = $repo->findTicketByNo($ticketNo);
+        if (!$ticket) {
+            Responder::error('TICKET_NOT_FOUND', '工单不存在。', 404);
+        }
+
+        $operations = $repo->getTicketOperations($ticketNo);
+
+        Responder::send([
+            'ok' => true,
+            'operations' => $operations,
+        ]);
     }
 }

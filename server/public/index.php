@@ -10,11 +10,12 @@ $requestScheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'h
 $requestHost = (string)($_SERVER['HTTP_HOST'] ?? '');
 $currentOrigin = $requestHost !== '' ? $requestScheme . '://' . $requestHost : '';
 
+// 是否允许 localhost 跨域由 allow_localhost_cors 配置控制；生产环境建议在 config/app.php 中设为 false
 $isAllowedCorsOrigin = false;
 if ($origin !== '') {
     if ($origin === $currentOrigin || in_array($origin, $allowedOrigins, true)) {
         $isAllowedCorsOrigin = true;
-    } else {
+    } elseif ((bool)($appConfig['allow_localhost_cors'] ?? false)) {
         $parts = parse_url($origin);
         $devHosts = ['localhost', '127.0.0.1'];
         $isAllowedCorsOrigin = is_array($parts)

@@ -3,9 +3,9 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { api } from '../api/client'
-import { getErrorMessage, getApiError } from '../utils/errors'
-import { useAppStore } from '../stores/app'
+import { api } from '@/api/client'
+import { getErrorMessage, getApiError } from '@/utils/errors'
+import { useAppStore } from '@/stores/app'
 
 const { t } = useI18n()
 const submitting = ref(false)

@@ -1,9 +1,9 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { ElMessage } from 'element-plus'
-import { i18n } from '../i18n'
-import { api } from '../api/client'
-import { getErrorMessage } from '../utils/errors'
+import { i18n } from '@/i18n'
+import { api } from '@/api/client'
+import { getErrorMessage } from '@/utils/errors'
 
 /**
  * 应用全局 Pinia Store
@@ -19,6 +19,7 @@ export const useAppStore = defineStore('app', () => {
   const initialized = ref(false)
   const uploadMode = ref<UploadMode>('off')
   const uploadMaxBytes = ref(defaultUploadMaxBytes)
+  const systemVersion = ref('1.0.0')
   const typeOptions = ref<EnumOption<FeedbackType>[]>([])
   const severityOptions = ref<EnumOption<Severity>[]>([])
   const statusOptions = ref<EnumOption<TicketStatus>[]>([])
@@ -61,14 +62,33 @@ export const useAppStore = defineStore('app', () => {
       isInstalled.value = Boolean(data.installed)
       uploadMode.value = data.uploadMode || 'off'
       uploadMaxBytes.value = Number(data.uploadMaxBytes) > 0 ? Number(data.uploadMaxBytes) : defaultUploadMaxBytes
+      systemVersion.value = normalizeVersion(data.systemVersion)
     } catch (error) {
       isInstalled.value = false
       uploadMode.value = 'off'
       uploadMaxBytes.value = defaultUploadMaxBytes
+      systemVersion.value = '1.0.0'
       ElMessage.error(getErrorMessage(error, t('messages.installStatusError')))
     } finally {
       checkingInstall.value = false
     }
+  }
+
+  function normalizeVersion(version?: string): string {
+    if (!version) {
+      return '1.0.0'
+    }
+
+    const raw = version.trim()
+    if (/^\d+\.\d+\.\d+$/.test(raw)) {
+      return raw
+    }
+
+    if (/^\d+$/.test(raw)) {
+      return `${raw}.0.0`
+    }
+
+    return '1.0.0'
   }
 
   async function installSystem(payload: InstallForm): Promise<void> {
@@ -124,6 +144,7 @@ export const useAppStore = defineStore('app', () => {
     activeTab,
     uploadMode,
     uploadMaxBytes,
+    systemVersion,
     typeOptions,
     severityOptions,
     statusOptions,

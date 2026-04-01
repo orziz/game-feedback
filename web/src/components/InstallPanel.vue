@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
-import { useAppStore } from '../stores/app'
+import { useAppStore } from '@/stores/app'
 
 const { t } = useI18n()
 const appStore = useAppStore()

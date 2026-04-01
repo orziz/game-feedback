@@ -15,16 +15,24 @@ use GameFeedback\Support\Responder;
 final class Ticket extends BaseApiSubModule
 {
     /**
-     * @return array<string, array{methods: array<int, string>, allow_before_install?: bool}>
+     * @return array<string, array{
+     *   methods: array<int, string>,
+     *   allow_before_install?: bool,
+     *   rate_limit?: array<string, int|string>
+     * }>
      */
     protected function actionMeta(): array
     {
         return [
             'submit' => [
-                'methods' => ['POST'],
+                self::META_METHODS => ['POST'],
+                // 公开提单：10 分钟 10 次，超限封禁 10 分钟
+                self::META_RATE_LIMIT => $this->rateLimitMeta('feedback-submit', 10, 600, 600),
             ],
             'search' => [
-                'methods' => ['GET'],
+                self::META_METHODS => ['GET'],
+                // 公开搜索：10 分钟 60 次，超限封禁 5 分钟
+                self::META_RATE_LIMIT => $this->rateLimitMeta('feedback-search', 60, 600, 300),
             ],
         ];
     }
@@ -42,8 +50,7 @@ final class Ticket extends BaseApiSubModule
             if ($formPayload !== []) {
                 $payload = $formPayload;
             } else {
-                // Some Nginx/PHP-FPM environments may drop multipart text fields.
-                // Fallback to query params to keep attachment submit usable.
+                // 某些 Nginx/PHP-FPM 组合下 multipart 文本字段会丢失，回退到 query 参数保证提单可用
                 $payload = [
                     'type' => Request::query('type'),
                     'severity' => Request::query('severity'),
@@ -132,6 +139,14 @@ final class Ticket extends BaseApiSubModule
                     'totalPages' => 1,
                 ],
             ]);
+        }
+
+        if (function_exists('mb_strlen')) {
+            if (mb_strlen($keyword, 'UTF-8') < 2) {
+                Responder::error('KEYWORD_TOO_SHORT', '关键词至少 2 个字符。', 422);
+            }
+        } elseif (strlen($keyword) < 2) {
+            Responder::error('KEYWORD_TOO_SHORT', '关键词至少 2 个字符。', 422);
         }
 
         $page = $this->sanitizer->parseInt(Request::query('page', '1'), 1, 100000);

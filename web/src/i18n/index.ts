@@ -16,9 +16,15 @@ const SEVERITY_KEYS: readonly string[] = ['low', 'medium', 'high', 'critical']
 /** 通过 import.meta.glob 自动导入 locales 目录下的所有语言文件 */
 const localeModules = import.meta.glob<{ default: MessageSchema }>('./locales/*.ts', { eager: true })
 
+function resolveLocaleCode(modulePath: string): LocaleCode | undefined {
+  const locale = modulePath.match(/[\\/]locales[\\/](.+)\.ts$/)?.[1]
+  if (locale === 'zh-CN' || locale === 'en') return locale
+  return undefined
+}
+
 const messages = Object.entries(localeModules).reduce<Record<LocaleCode, MessageSchema>>(
   (all, [path, module]) => {
-    const locale = path.match(/\.\/locales\/(.+)\.ts$/)?.[1] as LocaleCode | undefined
+    const locale = resolveLocaleCode(path)
     if (locale) all[locale] = module.default
     return all
   },
@@ -40,6 +46,7 @@ function detectInitialLocale(): LocaleCode {
 /** vue-i18n 实例，非 legacy 模式 */
 export const i18n = createI18n({
   legacy:         false,
+  globalInjection: true,
   locale:         detectInitialLocale(),
   fallbackLocale: 'zh-CN' as const,
   messages:       messages as Record<string, any>,
@@ -92,13 +99,13 @@ export function translateSeverity(t: Translator, value: Severity): string {
  * @param status - 工单状态枚举值
  * @returns Tag 颜色类型
  */
-export function getStatusTagType(status: TicketStatus): 'success' | 'warning' | 'info' | 'danger' | '' {
+export function getStatusTagType(status: TicketStatus): 'success' | 'warning' | 'info' | 'danger' {
   switch (status) {
     case 2:  return 'success'
     case 1:  return 'warning'
     case 0:  return 'info'
     case 3:  return 'danger'
-    default: return ''
+    default: return 'info'
   }
 }
 

@@ -10,7 +10,7 @@ import { persistLocale } from './i18n'
 
 const { t, locale } = useI18n()
 const appStore   = useAppStore()
-const { isInstalled } = storeToRefs(appStore)
+const { isInstalled, systemVersion } = storeToRefs(appStore)
 
 const elementLocale = computed(() => (locale.value === 'zh-CN' ? zhCn : en))
 
@@ -32,6 +32,7 @@ appStore.initialize()
         <AppHero
           class="page-header"
           :installed="isInstalled"
+          :system-version="systemVersion"
           :locale="locale as LocaleCode"
           @update:locale="locale = $event"
         />

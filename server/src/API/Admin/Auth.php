@@ -12,16 +12,21 @@ use GameFeedback\Support\Responder;
 final class Auth extends AdminSubModule
 {
     /**
-     * @return array<string, array{methods: array<int, string>, allow_before_install?: bool}>
+     * @return array<string, array{
+     *   methods: array<int, string>,
+     *   allow_before_install?: bool,
+     *   auth?: string
+     * }>
      */
     protected function actionMeta(): array
     {
         return [
             'login' => [
-                'methods' => ['POST'],
+                self::META_METHODS => ['POST'],
             ],
             'currentUser' => [
-                'methods' => ['GET'],
+                self::META_METHODS => ['GET'],
+                self::META_AUTH => self::AUTH_ADMIN,
             ],
         ];
     }
@@ -62,7 +67,7 @@ final class Auth extends AdminSubModule
 
     protected function currentUser(): void
     {
-        $user = $this->ensureAdmin();
+        $user = $this->currentAdminUser();
 
         Responder::send([
             'ok' => true,

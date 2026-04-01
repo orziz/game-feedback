@@ -19,12 +19,12 @@ final class Setup extends BaseApiSubModule
     {
         return [
             'enumOptions' => [
-                'methods' => ['GET'],
-                'allow_before_install' => true,
+                self::META_METHODS => ['GET'],
+                self::META_ALLOW_BEFORE_INSTALL => true,
             ],
             'install' => [
-                'methods' => ['POST'],
-                'allow_before_install' => true,
+                self::META_METHODS => ['POST'],
+                self::META_ALLOW_BEFORE_INSTALL => true,
             ],
         ];
     }

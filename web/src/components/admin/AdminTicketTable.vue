@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { getFeedbackTypeTagType, getStatusTagType } from '../../i18n'
-import { useAppStore } from '../../stores/app'
+import TicketMetaTag from '@/components/shared/TicketMetaTag.vue'
 
 defineProps<{
   tickets:  TicketRecord[]
@@ -18,21 +17,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const appStore = useAppStore()
 const bugType: FeedbackType = 0
-
-function formatSeverity(row: TicketRecord): string {
-  if (row.type !== bugType) return '--'
-  return row.severity !== null ? appStore.getSeverityLabel(row.severity) : '--'
-}
-
-function severityClass(severity: Severity | null): string {
-  if (severity === null) return 'severity-chip--none'
-  if (severity === 0) return 'severity-chip--low'
-  if (severity === 1) return 'severity-chip--medium'
-  if (severity === 2) return 'severity-chip--high'
-  return 'severity-chip--critical'
-}
 </script>
 
 <template>
@@ -57,32 +42,26 @@ function severityClass(severity: Severity | null): string {
       <el-table-column prop="ticket_no" :label="t('admin.ticketIdCol')" min-width="170" />
       <el-table-column prop="type" :label="t('admin.typeCol')" width="92" align="center" header-align="center">
         <template #default="{ row }">
-          <el-tag :type="getFeedbackTypeTagType(row.type)" effect="light" size="small" class="compact-tag">
-            {{ appStore.getTypeLabel(row.type) }}
-          </el-tag>
+          <TicketMetaTag kind="type" :value="row.type" />
         </template>
       </el-table-column>
       <el-table-column prop="severity" :label="t('admin.severityCol')" width="98" align="center" header-align="center">
         <template #default="{ row }">
-          <el-tag
-            v-if="row.type === bugType"
-            effect="light"
-            size="small"
-            class="compact-tag severity-chip"
-            :class="severityClass(row.severity)"
-          >
-            {{ formatSeverity(row) }}
-          </el-tag>
+          <TicketMetaTag v-if="row.type === bugType" kind="severity" :value="row.severity" />
           <span v-else>--</span>
         </template>
       </el-table-column>
       <el-table-column prop="title"    :label="t('admin.titleCol')"    min-width="220" show-overflow-tooltip />
       <el-table-column prop="contact"  :label="t('admin.contactCol')"  min-width="160" show-overflow-tooltip />
+      <el-table-column prop="assigned_username" :label="t('admin.assignedToCol')" width="100" align="center" header-align="center">
+        <template #default="{ row }">
+          <span v-if="!row.assigned_to" class="unassigned">{{ t('common.unassigned') }}</span>
+          <span v-else class="assigned-user">{{ row.assigned_username }}</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="status"   :label="t('admin.statusCol')"   width="100" align="center" header-align="center">
         <template #default="{ row }">
-          <el-tag :type="getStatusTagType(row.status)" effect="dark" size="small" class="compact-tag">
-            {{ appStore.getStatusLabel(row.status) }}
-          </el-tag>
+          <TicketMetaTag kind="status" :value="row.status" effect="dark" />
         </template>
       </el-table-column>
       <el-table-column prop="created_at" :label="t('admin.createdAtCol')" width="180" />
@@ -91,7 +70,7 @@ function severityClass(severity: Severity | null): string {
 
     <el-pagination
       class="admin-pagination"
-      small
+      size="small"
       layout="total, sizes, prev, pager, next"
       :current-page="page"
       :page-size="pageSize"
@@ -140,38 +119,21 @@ function severityClass(severity: Severity | null): string {
 .admin-table :deep(.el-table__inner-wrapper) { height: 100%; }
 .admin-pagination { justify-content: flex-end; }
 
-.compact-tag :deep(.el-tag__content) {
-  letter-spacing: 0;
+.unassigned {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
 }
 
-.severity-chip {
-  border-width: 1px;
-  font-weight: 700;
-}
-
-.severity-chip--low {
-  color: #166534;
-  border-color: #86efac;
-  background: #f0fdf4;
-}
-
-.severity-chip--medium {
-  color: #a16207;
-  border-color: #fcd34d;
-  background: #fffbeb;
-}
-
-.severity-chip--high {
-  color: #c2410c;
-  border-color: #fdba74;
-  background: #fff7ed;
-}
-
-.severity-chip--critical {
-  color: #b91c1c;
-  border-color: #fca5a5;
-  background: #fef2f2;
-  box-shadow: inset 0 0 0 1px rgba(185, 28, 28, 0.1);
+.assigned-user {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 12px;
+  background: #dbeafe;
+  color: #1e40af;
+  border-radius: 3px;
+  font-weight: 500;
 }
 
 @media (max-width: 768px) {

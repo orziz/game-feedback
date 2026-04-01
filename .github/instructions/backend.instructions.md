@@ -93,8 +93,10 @@ if (strpos($_SERVER['CONTENT_TYPE'] ?? '', 'multipart/form-data') !== false) {
 ## PHP Standards & Type Hints
 
 **Enforce**:
-- PHP 8.4+: Use strict typing, type hints on all parameters and return types
-- Syntax check: `/Applications/MAMP/bin/php/php8.4.1/bin/php -l <file>` (use this since `php` not in PATH)
+- PHP 7.2+ compatibility is mandatory for all backend changes
+- Keep `declare(strict_types=1);`, but do not use syntax newer than PHP 7.2
+- Do not introduce typed properties, arrow functions, nullsafe operators, `match`, native enums, constructor property promotion, or union types
+- Syntax check with `php -l <file>` using the target runtime or an equivalent PHP 7.2 compatible binary
 - Follow PSR-12 style guide (spaces, naming conventions)
 - Use `final` on classes that shouldn't be extended; prefer composition
 

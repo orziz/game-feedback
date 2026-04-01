@@ -17,14 +17,15 @@ final class Database
     /**
      * 根据连接参数创建 PDO 实例
      *
-     * @param string $host     数据库主机
-     * @param int    $port     端口
-     * @param string $database 库名
-     * @param string $username 用户名
-     * @param string $password 密码
+     * @param string $host        数据库主机
+     * @param int    $port        端口
+     * @param string $database    库名
+     * @param string $username    用户名
+     * @param string $password    密码
+     * @param bool   $exposeError 是否在响应中暴露详细错误（安装流程传 true，运行态传 false）
      * @return PDO
      */
-    public static function createPdo(string $host, int $port, string $database, string $username, string $password): PDO
+    public static function createPdo(string $host, int $port, string $database, string $username, string $password, bool $exposeError = true): PDO
     {
         try {
             $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', $host, $port, $database);
@@ -34,17 +35,25 @@ final class Database
                 PDO::ATTR_EMULATE_PREPARES => false,
             ]);
         } catch (Throwable $e) {
+            if ($exposeError) {
+                // 安装流程中允许输出详细错误，方便诊断连接参数
+                $message = '数据库连接失败：' . $e->getMessage();
+            } else {
+                // 运行时不对外暴露内部错误信息，防止泄露主机/用户名等拓扑信息
+                error_log('[DB] Connection failed: ' . $e->getMessage());
+                $message = '数据库连接失败，请稍后重试。';
+            }
             Responder::send([
                 'ok' => false,
                 'code' => 'DB_CONNECT_FAILED',
-                'message' => '数据库连接失败：' . $e->getMessage(),
+                'message' => $message,
             ], 500);
             exit;
         }
     }
 
     /**
-     * 从已加载的配置数组创建 PDO 实例
+     * 从已加载的配置数组创建 PDO 实例（运行态，不对外暴露连接错误详情）
      *
      * @param array<string, mixed> $dbConfig database.php 返回的配置数组
      * @return PDO
@@ -56,7 +65,8 @@ final class Database
             (int)$dbConfig['port'],
             (string)$dbConfig['database'],
             (string)$dbConfig['username'],
-            (string)$dbConfig['password']
+            (string)$dbConfig['password'],
+            false // 运行时不对外暴露连接错误详情
         );
     }
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useAppStore } from '../stores/app'
+import TicketMetaTag from '@/components/shared/TicketMetaTag.vue'
 
 const props = defineProps<{
   status: TicketStatus
@@ -9,7 +9,6 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
-const appStore = useAppStore()
 
 const steps = computed(() => [
   { value: 0 as TicketStatus, label: t('status.pending') },
@@ -40,7 +39,7 @@ function stepState(index: number): string {
   <section class="ticket-progress" :class="toneClass">
     <div v-if="props.showSummary !== false" class="ticket-progress__summary">
       <span class="ticket-progress__label">{{ t('common.progress') }}</span>
-      <strong class="ticket-progress__value">{{ appStore.getStatusLabel(props.status) }}</strong>
+      <TicketMetaTag kind="status" :value="props.status" size="default" round />
     </div>
 
     <ol class="ticket-progress__steps">
