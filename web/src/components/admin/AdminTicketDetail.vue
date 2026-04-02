@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
@@ -22,6 +23,61 @@ const adminStore = useAdminStore()
 const { severityOptions, statusOptions } = storeToRefs(appStore)
 const { assignees, ticketOperations } = storeToRefs(adminStore)
 const bugType: FeedbackType = 0
+const imagePreviewUrl = ref<string | null>(null)
+const imagePreviewLoading = ref(false)
+const imagePreviewError = ref(false)
+
+const isImageAttachment = computed(() => {
+  const mime = props.ticket?.attachment_mime?.toLowerCase() || ''
+  if (mime.startsWith('image/')) {
+    return true
+  }
+
+  const name = props.ticket?.attachment_name?.toLowerCase() || ''
+  return name.endsWith('.png')
+    || name.endsWith('.jpg')
+    || name.endsWith('.jpeg')
+    || name.endsWith('.gif')
+    || name.endsWith('.webp')
+})
+
+function revokeImagePreviewUrl(): void {
+  if (imagePreviewUrl.value) {
+    URL.revokeObjectURL(imagePreviewUrl.value)
+    imagePreviewUrl.value = null
+  }
+}
+
+async function loadImagePreview(ticket: TicketRecord | null): Promise<void> {
+  revokeImagePreviewUrl()
+  imagePreviewError.value = false
+
+  if (!ticket?.attachment_name || !isImageAttachment.value) {
+    imagePreviewLoading.value = false
+    return
+  }
+
+  imagePreviewLoading.value = true
+  try {
+    const blob = await api.admin.Ticket.getBlob.attachmentDownload({ ticketNo: ticket.ticket_no })
+    if (blob.type.includes('application/json')) {
+      const text = await blob.text()
+      const payload = JSON.parse(text) as Partial<ApiResponseBase>
+      throw new Error(payload.message || t('messages.attachmentDownloadFailed'))
+    }
+
+    if (blob.size === 0) {
+      throw new Error(t('messages.attachmentDownloadFailed'))
+    }
+
+    imagePreviewUrl.value = URL.createObjectURL(blob)
+  } catch (error) {
+    imagePreviewError.value = true
+    ElMessage.error(getErrorMessage(error, t('messages.attachmentDownloadFailed')))
+  } finally {
+    imagePreviewLoading.value = false
+  }
+}
 
 async function handleDownloadAttachment(ticket: TicketRecord): Promise<void> {
   const attachmentName = ticket.attachment_name || ''
@@ -62,6 +118,18 @@ function parseStatusValue(value: string | null): TicketStatus | null {
   }
   return parsed as TicketStatus
 }
+
+watch(
+  () => props.ticket?.ticket_no,
+  () => {
+    void loadImagePreview(props.ticket)
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  revokeImagePreviewUrl()
+})
 </script>
 
 <template>
@@ -95,7 +163,23 @@ function parseStatusValue(value: string | null): TicketStatus | null {
 
         <div v-if="ticket.attachment_name" class="admin-detail-row admin-detail-row--top">
           <div class="admin-detail-row__label">{{ t('common.attachment') }}</div>
-          <div class="admin-detail-row__value">
+          <div class="admin-detail-row__value admin-detail-card__attachment">
+            <el-image
+              v-if="isImageAttachment && imagePreviewUrl"
+              :src="imagePreviewUrl"
+              :preview-src-list="[imagePreviewUrl]"
+              fit="cover"
+              preview-teleported
+              class="admin-detail-card__image-preview"
+            />
+            <div v-else-if="isImageAttachment && imagePreviewLoading" class="admin-detail-card__attachment-state">
+              {{ t('common.loading') }}
+            </div>
+            <div v-else-if="isImageAttachment && imagePreviewError" class="admin-detail-card__attachment-state">
+              <el-button type="primary" text @click="loadImagePreview(ticket)">
+                {{ t('admin.retryImagePreview', { name: ticket.attachment_name }) }}
+              </el-button>
+            </div>
             <el-button type="primary" text @click="handleDownloadAttachment(ticket)">
               {{ t('admin.downloadAttachment', { name: ticket.attachment_name }) }}
             </el-button>
@@ -271,6 +355,36 @@ function parseStatusValue(value: string | null): TicketStatus | null {
 .admin-detail-card__form :deep(.el-form-item__label) {
   padding-bottom: 6px;
   line-height: 1.2;
+}
+
+.admin-detail-card__attachment {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.admin-detail-card__attachment-name {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  word-break: break-all;
+}
+
+.admin-detail-card__attachment-state {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.admin-detail-card__image-preview {
+  width: 180px;
+  max-width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid rgba(15, 118, 110, 0.14);
+  border-radius: 12px;
+  cursor: zoom-in;
+  background: linear-gradient(180deg, rgba(248, 251, 253, 0.95), rgba(255, 255, 255, 0.98));
 }
 
 .admin-detail-card__tip { margin-left: 10px; color: var(--ink-soft); }

@@ -70,9 +70,9 @@ final class AttachmentUploader
         }
 
         $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
-        $allowedByExt = ['zip', 'png', 'jpg', 'jpeg'];
+        $allowedByExt = ['zip', 'rar', 'png', 'jpg', 'jpeg'];
         if (!in_array($extension, $allowedByExt, true)) {
-            Responder::error('UPLOAD_FILE_TYPE_NOT_ALLOWED', 'Only zip, png, jpg, and jpeg files are allowed.', 422);
+            Responder::error('UPLOAD_FILE_TYPE_NOT_ALLOWED', 'Only zip, rar, png, jpg, and jpeg files are allowed.', 422);
         }
 
         $finfo = function_exists('finfo_open') ? finfo_open(FILEINFO_MIME_TYPE) : false;
@@ -85,18 +85,23 @@ final class AttachmentUploader
             'application/zip',
             'application/x-zip-compressed',
             'multipart/x-zip',
+            'application/vnd.rar',
+            'application/x-rar-compressed',
+            'application/octet-stream',
             'image/png',
             'image/jpeg',
         ];
         if ($detectedMime !== '' && !in_array($detectedMime, $allowedMimes, true)) {
-            Responder::error('UPLOAD_FILE_TYPE_NOT_ALLOWED', 'Only zip, png, jpg, and jpeg files are allowed.', 422);
+            Responder::error('UPLOAD_FILE_TYPE_NOT_ALLOWED', 'Only zip, rar, png, jpg, and jpeg files are allowed.', 422);
         }
 
         $mime = $detectedMime !== ''
             ? $detectedMime
             : ($extension === 'png'
                 ? 'image/png'
-                : ($extension === 'zip' ? 'application/zip' : 'image/jpeg'));
+                : ($extension === 'zip'
+                    ? 'application/zip'
+                    : ($extension === 'rar' ? 'application/vnd.rar' : 'image/jpeg')));
 
         if ($mode === 'local') {
             // 本地存储：按年月目录归档

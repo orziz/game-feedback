@@ -57,7 +57,11 @@ function handleAttachmentChange(event: Event): void {
   }
 
   const fileName = file.name.toLowerCase()
-  const validExtension = fileName.endsWith('.zip') || fileName.endsWith('.png') || fileName.endsWith('.jpg') || fileName.endsWith('.jpeg')
+  const validExtension = fileName.endsWith('.zip')
+    || fileName.endsWith('.rar')
+    || fileName.endsWith('.png')
+    || fileName.endsWith('.jpg')
+    || fileName.endsWith('.jpeg')
   if (!validExtension) {
     ElMessage.warning(t('messages.uploadTypeInvalid'))
     target.value = ''
@@ -239,7 +243,7 @@ async function handleSubmit(): Promise<void> {
         <input
           ref="attachmentInputRef"
           type="file"
-          accept=".zip,.png,.jpg,.jpeg,image/png,image/jpeg,application/zip"
+          accept=".zip,.rar,.png,.jpg,.jpeg,image/png,image/jpeg,application/zip,application/x-rar-compressed,application/vnd.rar"
           :disabled="!canUploadAttachment || submitting"
           class="submit-attachment__native"
           @change="handleAttachmentChange"
