@@ -234,7 +234,7 @@ async function handleSubmit(): Promise<void> {
       </div>
     </div>
 
-    <div class="submit-form__attachment-block">
+    <div class="submit-form__attachment-block" v-if="canUploadAttachment">
       <div class="submit-attachment">
         <input
           ref="attachmentInputRef"
@@ -255,8 +255,6 @@ async function handleSubmit(): Promise<void> {
             {{ t('submitForm.clearAttachment') }}
           </el-button>
         </div>
-        <p class="submit-attachment__tip">{{ attachmentTipText }}</p>
-        <p v-if="!canUploadAttachment" class="submit-attachment__disabled">{{ t('submitForm.attachmentDisabled') }}</p>
       </div>
     </div>
 
@@ -305,6 +303,7 @@ async function handleSubmit(): Promise<void> {
 .submit-form__row-label {
   color: var(--ink);
   font-size: 14px;
+  min-width: 180px;
   font-weight: 700;
   line-height: 1.4;
 }
