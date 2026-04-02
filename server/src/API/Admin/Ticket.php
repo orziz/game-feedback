@@ -50,6 +50,10 @@ final class Ticket extends AdminSubModule
                 self::META_METHODS => ['GET'],
                 self::META_AUTH => self::AUTH_ADMIN,
             ],
+            'attachmentUrl' => [
+                self::META_METHODS => ['GET'],
+                self::META_AUTH => self::AUTH_ADMIN,
+            ],
         ];
     }
 
@@ -380,6 +384,60 @@ final class Ticket extends AdminSubModule
             'ok' => true,
             'message' => '指派成功。',
         ]);
+    }
+
+    protected function attachmentUrl(): void
+    {
+        $ticketNo = $this->sanitizer->sanitizeSingleLine(Request::query('ticketNo'), 32);
+        if ($ticketNo === '' || !$this->sanitizer->isValidTicketNo($ticketNo)) {
+            Responder::error('INVALID_TICKET_NO', '工单号格式不正确。', 422);
+        }
+
+        $ticket = $this->createTicketRepository()->findTicketByNo($ticketNo);
+        if (!$ticket) {
+            Responder::error('TICKET_NOT_FOUND', '工单不存在。', 404);
+        }
+
+        $attachmentKey     = (string)($ticket['attachment_key']     ?? '');
+        $attachmentStorage = (string)($ticket['attachment_storage'] ?? '');
+        $attachmentName    = (string)($ticket['attachment_name']    ?? '');
+
+        if ($attachmentKey === '' || $attachmentStorage === '' || $attachmentName === '') {
+            Responder::error('ATTACHMENT_NOT_FOUND', '该工单没有附件。', 404);
+        }
+
+        // 仅当 storage=qiniu 且配置启用了 qiniu_direct_access 时，才返回直连 URL
+        $directAccess = $this->resolveConfigFlag('qiniu_direct_access', false);
+        if ($directAccess && $attachmentStorage === 'qiniu') {
+            $url = $this->buildQiniuDownloadUrl($attachmentKey, 600);
+            if ($url !== '') {
+                Responder::send([
+                    'ok'   => true,
+                    'mode' => 'direct',
+                    'url'  => $url,
+                ]);
+                return;
+            }
+        }
+
+        // 本地存储或未开启直连：让前端走代理下载
+        Responder::send(['ok' => true, 'mode' => 'proxy']);
+    }
+
+    private function resolveConfigFlag(string $key, bool $default): bool
+    {
+        if (!array_key_exists($key, $this->dbConfig)) {
+            return $default;
+        }
+        $value = $this->dbConfig[$key];
+        if (is_bool($value)) {
+            return $value;
+        }
+        $normalized = strtolower(trim((string)$value));
+        if ($normalized === '') {
+            return $default;
+        }
+        return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
     }
 
     protected function getOperations(): void

@@ -7,7 +7,7 @@ import { api } from '@/api/client'
 import { useAppStore } from '@/stores/app'
 import { useAdminStore } from '@/stores/admin'
 import TicketMetaTag from '@/components/shared/TicketMetaTag.vue'
-import { triggerBlobDownload } from '@/utils/download'
+import { triggerBlobDownload, triggerUrlDownload } from '@/utils/download'
 import { getErrorMessage } from '@/utils/errors'
 
 const props = defineProps<{
@@ -26,6 +26,9 @@ const bugType: FeedbackType = 0
 const imagePreviewUrl = ref<string | null>(null)
 const imagePreviewLoading = ref(false)
 const imagePreviewError = ref(false)
+// 七牛直连时缓存签名 URL，供下载复用，避免重复请求
+const attachmentDirectUrl = ref<string | null>(null)
+let imagePreviewIsBlobUrl = false
 
 const isImageAttachment = computed(() => {
   const mime = props.ticket?.attachment_mime?.toLowerCase() || ''
@@ -42,35 +45,49 @@ const isImageAttachment = computed(() => {
 })
 
 function revokeImagePreviewUrl(): void {
-  if (imagePreviewUrl.value) {
+  if (imagePreviewIsBlobUrl && imagePreviewUrl.value) {
     URL.revokeObjectURL(imagePreviewUrl.value)
-    imagePreviewUrl.value = null
   }
+  imagePreviewUrl.value = null
+  imagePreviewIsBlobUrl = false
+  attachmentDirectUrl.value = null
 }
 
 async function loadImagePreview(ticket: TicketRecord | null): Promise<void> {
   revokeImagePreviewUrl()
   imagePreviewError.value = false
 
-  if (!ticket?.attachment_name || !isImageAttachment.value) {
+  if (!ticket?.attachment_name) {
     imagePreviewLoading.value = false
     return
   }
 
-  imagePreviewLoading.value = true
+  imagePreviewLoading.value = isImageAttachment.value
   try {
-    const blob = await api.admin.Ticket.getBlob.attachmentDownload({ ticketNo: ticket.ticket_no })
-    if (blob.type.includes('application/json')) {
-      const text = await blob.text()
-      const payload = JSON.parse(text) as Partial<ApiResponseBase>
-      throw new Error(payload.message || t('messages.attachmentDownloadFailed'))
-    }
+    // 先查询附件访问模式（代理 or 七牛直连）
+    const access = await api.admin.Ticket.get.attachmentUrl({ ticketNo: ticket.ticket_no })
 
-    if (blob.size === 0) {
-      throw new Error(t('messages.attachmentDownloadFailed'))
+    if (access.mode === 'direct' && access.url) {
+      // 直连模式：缓存签名 URL，图片直接用作 img src，无需额外请求
+      attachmentDirectUrl.value = access.url
+      if (isImageAttachment.value) {
+        imagePreviewUrl.value = access.url
+        imagePreviewIsBlobUrl = false
+      }
+    } else if (isImageAttachment.value) {
+      // 代理模式：图片需要通过后端代理下载再预览
+      const blob = await api.admin.Ticket.getBlob.attachmentDownload({ ticketNo: ticket.ticket_no })
+      if (blob.type.includes('application/json')) {
+        const text = await blob.text()
+        const payload = JSON.parse(text) as Partial<ApiResponseBase>
+        throw new Error(payload.message || t('messages.attachmentDownloadFailed'))
+      }
+      if (blob.size === 0) {
+        throw new Error(t('messages.attachmentDownloadFailed'))
+      }
+      imagePreviewUrl.value = URL.createObjectURL(blob)
+      imagePreviewIsBlobUrl = true
     }
-
-    imagePreviewUrl.value = URL.createObjectURL(blob)
   } catch (error) {
     imagePreviewError.value = true
     ElMessage.error(getErrorMessage(error, t('messages.attachmentDownloadFailed')))
@@ -79,29 +96,40 @@ async function loadImagePreview(ticket: TicketRecord | null): Promise<void> {
   }
 }
 
-async function handleDownloadAttachment(ticket: TicketRecord): Promise<void> {
+function handleDownloadAttachment(ticket: TicketRecord): void {
   const attachmentName = ticket.attachment_name || ''
   if (!attachmentName) {
     ElMessage.warning(t('messages.attachmentNotFound'))
     return
   }
 
-  try {
-    const blob = await api.admin.Ticket.getBlob.attachmentDownload({ ticketNo: ticket.ticket_no })
-    if (blob.type.includes('application/json')) {
-      const text = await blob.text()
-      const payload = JSON.parse(text) as Partial<ApiResponseBase>
-      throw new Error(payload.message || t('messages.attachmentDownloadFailed'))
-    }
-
-    if (blob.size === 0) {
-      throw new Error(t('messages.attachmentDownloadFailed'))
-    }
-
-    triggerBlobDownload(blob, attachmentName || `attachment-${ticket.ticket_no}`)
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('messages.attachmentDownloadFailed')))
+  // 若已缓存直连 URL（由 loadImagePreview 预取），直接触发下载
+  if (attachmentDirectUrl.value) {
+    triggerUrlDownload(attachmentDirectUrl.value, attachmentName)
+    return
   }
+
+  void (async () => {
+    try {
+      const access = await api.admin.Ticket.get.attachmentUrl({ ticketNo: ticket.ticket_no })
+      if (access.mode === 'direct' && access.url) {
+        attachmentDirectUrl.value = access.url
+        triggerUrlDownload(access.url, attachmentName)
+        return
+      }
+      // 代理模式：后端流式下载
+      const blob = await api.admin.Ticket.getBlob.attachmentDownload({ ticketNo: ticket.ticket_no })
+      if (blob.type.includes('application/json')) {
+        const text = await blob.text()
+        const payload = JSON.parse(text) as Partial<ApiResponseBase>
+        throw new Error(payload.message || t('messages.attachmentDownloadFailed'))
+      }
+      if (blob.size === 0) throw new Error(t('messages.attachmentDownloadFailed'))
+      triggerBlobDownload(blob, attachmentName)
+    } catch (error) {
+      ElMessage.error(getErrorMessage(error, t('messages.attachmentDownloadFailed')))
+    }
+  })()
 }
 
 function getOperationTypeLabel(opType: string): string {

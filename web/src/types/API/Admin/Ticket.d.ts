@@ -5,6 +5,7 @@ declare namespace API.Admin.Ticket {
       assignees: API.Meta.Get<void, AdminAssigneeListResponse>
       detail: API.Meta.Get<HttpParams.Detail, AdminDetailResponse>
       getOperations: API.Meta.Get<HttpParams.GetOperations, AdminOperationsResponse>
+      attachmentUrl: API.Meta.Get<HttpParams.AttachmentUrl, AttachmentUrlResponse>
     }
     getBlob: {
       attachmentDownload: API.Meta.GetBlob<HttpParams.AttachmentDownload>
@@ -46,6 +47,10 @@ declare namespace API.Admin.Ticket {
     }
 
     interface GetOperations {
+      ticketNo: string
+    }
+
+    interface AttachmentUrl {
       ticketNo: string
     }
   }
@@ -107,4 +112,9 @@ interface AdminDetailResponse extends ApiResponseBase {
 
 interface AdminOperationsResponse extends ApiResponseBase {
   operations: TicketOperation[]
+}
+
+interface AttachmentUrlResponse extends ApiResponseBase {
+  mode: 'direct' | 'proxy'
+  url?: string
 }
