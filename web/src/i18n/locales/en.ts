@@ -140,6 +140,7 @@ export default {
     queueEyebrow: 'TICKET QUEUE',
     queueTitle: 'Ticket Queue',
     queueDescription: 'Click any row to load the ticket and handle it.',
+    queueTotal: '{count} total',
     batchAssignButton: 'Batch Assign {count}',
     batchAssignTitle: 'Batch assign {count} ticket(s)',
     batchAssignHint: 'Choose an admin user and all selected tickets on the current list will be assigned to them. Selection is cleared automatically after refresh, paging, or list reload.',

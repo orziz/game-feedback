@@ -10,7 +10,8 @@ import { themeOverrides } from './ui/theme'
 
 const frontendVersion = __APP_VERSION__ || '0.0.0'
 const { locale } = useI18n()
-const appStore   = useAppStore()
+const appStore = useAppStore()
+const { initialize, refreshEnumOptions } = appStore
 const { isInstalled, systemVersion } = storeToRefs(appStore)
 
 const naiveLocale = computed(() => locale.value === 'zh-CN' ? zhCN : enUS)
@@ -20,7 +21,7 @@ let hasLoggedVersionInfo = false
 watch(locale, (v) => {
   const nextLocale = v as LocaleCode
   persistLocale(nextLocale)
-  void appStore.refreshEnumOptions(nextLocale)
+  void refreshEnumOptions(nextLocale)
 }, { immediate: true })
 
 watch(systemVersion, (version) => {
@@ -37,7 +38,7 @@ watch(systemVersion, (version) => {
   console.groupEnd()
 }, { immediate: true })
 
-appStore.initialize()
+initialize()
 </script>
 
 <template>

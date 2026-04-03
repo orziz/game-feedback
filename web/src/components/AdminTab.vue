@@ -16,6 +16,20 @@ const { t } = useI18n()
 const message = useMessage()
 const adminStore = useAdminStore()
 const {
+  setUsersLoading,
+  setAssignees,
+  setPage,
+  setPageSize,
+  setTicketsLoading,
+  applyTicketListResponse,
+  setSelectedTicket,
+  setTicketOperations,
+  populateUpdateFormFromTicket,
+  setUpdating,
+  logout,
+} = adminStore
+const {
+  token,
   loading,
   statusFilter,
   typeFilter,
@@ -27,10 +41,12 @@ const {
   pageSize,
   total,
   selectedTicket,
+  selectedTicketNo,
   updateForm,
   updating,
   isSuperAdmin,
   currentUser,
+  assignees,
 } = storeToRefs(adminStore)
 
 const detailVisible = ref(false)
@@ -47,44 +63,46 @@ onMounted(() => {
 
 async function loadAssignees(): Promise<void> {
   try {
-    adminStore.usersLoading = true
+    setUsersLoading(true)
     const data = await api.admin.Ticket.get.assignees()
-    adminStore.assignees = data.users
+    setAssignees(data.users)
   } catch (error) {
     message.error(getErrorMessage(error, t('messages.userLoadFailed')))
   } finally {
-    adminStore.usersLoading = false
+    setUsersLoading(false)
   }
 }
 
 async function loadTickets(nextPage = 1): Promise<void> {
-  if (!adminStore.token) return
-  adminStore.loading = true
+  if (!token.value) return
+  setTicketsLoading(true)
   try {
-    adminStore.page = nextPage
+    setPage(nextPage)
     const data = await api.admin.Ticket.get.list({
-      page: adminStore.page,
-      pageSize: adminStore.pageSize,
+      page: page.value,
+      pageSize: pageSize.value,
       status: statusFilter.value ?? undefined,
       type: typeFilter.value ?? undefined,
       severity: severityFilter.value ?? undefined,
       keyword: keyword.value.trim() || undefined,
       assignedTo: assignedFilter.value ?? undefined,
     })
-    const maxPage = Math.max(1, Math.ceil((data.pagination?.total || 0) / adminStore.pageSize))
-    adminStore.tickets = data.tickets
-    adminStore.total = data.pagination?.total || 0
+    applyTicketListResponse({
+      tickets: data.tickets,
+      total: data.pagination?.total || 0,
+      page: nextPage,
+      pageSize: pageSize.value,
+    })
     clearTicketSelection()
-    if (adminStore.page > maxPage) adminStore.page = maxPage
   } catch (error: unknown) {
     const apiError = getApiError(error)
     if (apiError?.code !== 'UNAUTHORIZED') {
       message.error(getErrorMessage(error, t('messages.adminLoadFailed')))
     } else {
-      adminStore.logout(false)
+      logout(false)
     }
   } finally {
-    adminStore.loading = false
+    setTicketsLoading(false)
   }
 }
 
@@ -133,7 +151,7 @@ function normalizeTicketOperations(payload: unknown): TicketOperation[] {
 
 async function handleSelectTicket(ticketNo: string): Promise<void> {
   detailVisible.value = true
-  adminStore.loading = true
+  setTicketsLoading(true)
   try {
     const data = await api.admin.Ticket.get.detail({ ticketNo })
     const detailPayload = data as unknown as {
@@ -154,46 +172,42 @@ async function handleSelectTicket(ticketNo: string): Promise<void> {
       }
     }
 
-    adminStore.selectedTicket = data.ticket
-    adminStore.selectedTicketNo = ticketNo
-    adminStore.ticketOperations = operations
-    adminStore.updateForm.status = data.ticket.status
-    adminStore.updateForm.severity = data.ticket.type === 0 ? (data.ticket.severity ?? 1) : null
-    adminStore.updateForm.adminNote = data.ticket.admin_note || ''
-    adminStore.updateForm.assignedTo = data.ticket.assigned_to || null
+    setSelectedTicket(ticketNo, data.ticket)
+    setTicketOperations(operations)
+    populateUpdateFormFromTicket(data.ticket)
   } catch (error) {
     message.error(getErrorMessage(error, t('messages.adminDetailFailed')))
   } finally {
-    adminStore.loading = false
+    setTicketsLoading(false)
   }
 }
 
 async function handleSaveTicket(): Promise<void> {
-  if (!adminStore.selectedTicketNo || !adminStore.selectedTicket) return
-  adminStore.updating = true
+  if (!selectedTicketNo.value || !selectedTicket.value) return
+  setUpdating(true)
   try {
     const bugType: FeedbackType = 0
     await api.admin.Ticket.post.update({
-      ticketNo: adminStore.selectedTicketNo,
+      ticketNo: selectedTicketNo.value,
       status: updateForm.value.status,
-      severity: adminStore.selectedTicket.type === bugType ? updateForm.value.severity : null,
+      severity: selectedTicket.value.type === bugType ? updateForm.value.severity : null,
       adminNote: updateForm.value.adminNote,
     })
 
     const newAssignedValue = updateForm.value.assignedTo || null
-    if (adminStore.selectedTicket.assigned_to !== newAssignedValue) {
+    if (selectedTicket.value.assigned_to !== newAssignedValue) {
       await api.admin.Ticket.post.assign({
-        ticketNo: adminStore.selectedTicketNo,
+        ticketNo: selectedTicketNo.value,
         assignedTo: newAssignedValue,
       })
     }
 
     message.success(t('messages.adminUpdateSuccess'))
-    await Promise.all([loadTickets(adminStore.page), handleSelectTicket(adminStore.selectedTicketNo)])
+    await Promise.all([loadTickets(page.value), handleSelectTicket(selectedTicketNo.value)])
   } catch (error) {
     message.error(getErrorMessage(error, t('messages.adminUpdateFailed')))
   } finally {
-    adminStore.updating = false
+    setUpdating(false)
   }
 }
 
@@ -251,7 +265,7 @@ async function handleBatchAssign(assignedTo: number): Promise<void> {
     })
     message.success(t('messages.batchAssignSuccess', { count: data.affected }))
     batchAssignVisible.value = false
-    await loadTickets(adminStore.page)
+    await loadTickets(page.value)
   } catch (error) {
     message.error(getErrorMessage(error, t('messages.batchAssignFailed')))
   } finally {
@@ -267,7 +281,7 @@ async function handleBatchAssign(assignedTo: number): Promise<void> {
         {{ currentUser?.username }}
         <n-tag v-if="isSuperAdmin" size="small" type="warning" :bordered="false">{{ t('admin.superAdmin') }}</n-tag>
       </span>
-      <n-button size="small" @click="adminStore.logout()">{{ t('common.logout') }}</n-button>
+      <n-button size="small" @click="logout()">{{ t('common.logout') }}</n-button>
     </div>
 
     <n-tabs v-model:value="adminTab" type="segment" class="admin-tabs">
@@ -300,7 +314,7 @@ async function handleBatchAssign(assignedTo: number): Promise<void> {
               @toggle-all-tickets-checked="handleToggleAllTicketsChecked"
               @batch-assign="batchAssignVisible = true"
               @page-change="loadTickets"
-              @page-size-change="(value: number) => { adminStore.pageSize = value; loadTickets(1) }"
+              @page-size-change="(value: number) => { setPageSize(value); loadTickets(1) }"
             />
           </div>
         </section>
@@ -309,7 +323,7 @@ async function handleBatchAssign(assignedTo: number): Promise<void> {
           v-model:show="batchAssignVisible"
           :loading="batchAssignLoading"
           :selected-count="checkedTicketNos.length"
-          :assignees="adminStore.assignees"
+          :assignees="assignees"
           @confirm="handleBatchAssign"
         />
 
@@ -344,6 +358,71 @@ async function handleBatchAssign(assignedTo: number): Promise<void> {
 </template>
 
 <style scoped>
+.admin-tabs {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.admin-tabs :deep(.n-tabs-nav--segment-type) {
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(243, 244, 246, 0.6);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.04);
+  backdrop-filter: blur(8px);
+  display: inline-flex;
+  align-self: flex-start;
+  margin-bottom: 4px;
+}
+
+.admin-tabs :deep(.n-tabs-tab) {
+  height: 40px;
+  border-radius: 999px;
+  padding: 0 24px;
+  color: var(--ink-soft);
+  background: transparent;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 14px;
+  font-weight: 600;
+  position: relative;
+  z-index: 1;
+}
+
+.admin-tabs :deep(.n-tabs-tab:hover) {
+  color: var(--ink);
+}
+
+.admin-tabs :deep(.n-tabs-pane-wrapper) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding-top: 18px;
+}
+
+.admin-tabs :deep(.n-tab-pane) {
+  display: flex;
+  min-height: 0;
+  height: 100%;
+}
+
+.admin-tabs :deep(.n-tab-pane > *) {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.admin-tabs :deep(.n-tabs-rail__segment) {
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 18px rgba(18, 27, 38, 0.10);
+  border-radius: 999px;
+}
+
+.admin-tabs :deep(.n-tabs-tab--active .n-tabs-tab__label) {
+  color: #0f1720;
+  font-weight: 700;
+}
+
 .admin-workspace {
   display: grid;
   flex: 1;
@@ -406,6 +485,17 @@ async function handleBatchAssign(assignedTo: number): Promise<void> {
 }
 
 @media (max-width: 768px) {
+  .admin-tabs :deep(.n-tabs-nav--segment-type) {
+    padding: 5px;
+    border-radius: 14px;
+  }
+
+  .admin-tabs :deep(.n-tabs-tab) {
+    height: 35px;
+    padding: 0 13px;
+    font-size: 13px;
+  }
+
   .admin-workspace__header {
     flex-direction: column;
     align-items: flex-start;

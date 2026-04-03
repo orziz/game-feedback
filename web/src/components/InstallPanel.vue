@@ -6,6 +6,7 @@ import { useAppStore } from '@/stores/app'
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const { installSystem } = appStore
 const { installLoading } = storeToRefs(appStore)
 
 const form = ref<InstallForm>({
@@ -83,7 +84,7 @@ const form = ref<InstallForm>({
         </n-form-item>
       </template>
 
-      <n-button type="primary" :loading="installLoading" @click="appStore.installSystem(form)">
+      <n-button type="primary" :loading="installLoading" @click="installSystem(form)">
         {{ t('common.install') }}
       </n-button>
     </n-form>

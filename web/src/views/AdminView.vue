@@ -10,11 +10,12 @@ import InstallPanel from '@/components/InstallPanel.vue'
 const { t } = useI18n()
 const appStore = useAppStore()
 const adminStore = useAdminStore()
+const { restoreSession, login } = adminStore
 const { isInstalled, checkingInstall } = storeToRefs(appStore)
 const { isAuthenticated, loading } = storeToRefs(adminStore)
 
 // 尝试恢复已存储的会话
-adminStore.restoreSession()
+void restoreSession()
 </script>
 
 <template>
@@ -29,7 +30,7 @@ adminStore.restoreSession()
       <AdminLoginPanel
         v-if="!isAuthenticated"
         :loading="loading"
-        @login="adminStore.login"
+        @login="login"
       />
 
       <AdminTab v-else />

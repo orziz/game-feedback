@@ -23,6 +23,7 @@ const props = withDefaults(defineProps<{
 })
 
 const appStore = useAppStore()
+const { getStatusLabel, getTypeLabel, getSeverityLabel } = appStore
 
 const normalizedValue = computed<number | null>(() => {
   if (props.value === null || props.value === undefined) {
@@ -40,12 +41,12 @@ const label = computed(() => {
   }
 
   if (props.kind === 'status') {
-    return appStore.getStatusLabel(normalizedValue.value as TicketStatus)
+    return getStatusLabel(normalizedValue.value as TicketStatus)
   }
   if (props.kind === 'type') {
-    return appStore.getTypeLabel(normalizedValue.value as FeedbackType)
+    return getTypeLabel(normalizedValue.value as FeedbackType)
   }
-  return appStore.getSeverityLabel(normalizedValue.value as Severity)
+  return getSeverityLabel(normalizedValue.value as Severity)
 })
 
 const tagType = computed<NaiveTagType>(() => {

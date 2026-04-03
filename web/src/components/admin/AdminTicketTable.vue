@@ -188,17 +188,20 @@ function createRowProps(row: TicketRecord) {
       />
     </div>
 
-    <n-pagination
-      class="admin-pagination"
-      size="small"
-      :page="page"
-      :page-size="pageSize"
-      :item-count="total"
-      :page-sizes="[10, 20, 50, 100]"
-      show-size-picker
-      @update:page="(value: number) => emit('page-change', value)"
-      @update:page-size="(value: number) => emit('page-size-change', value)"
-    />
+    <div class="admin-pagination-wrap">
+      <span class="admin-pagination__total">{{ t('admin.queueTotal', { count: total }) }}</span>
+      <n-pagination
+        class="admin-pagination"
+        size="small"
+        :page="page"
+        :page-size="pageSize"
+        :item-count="total"
+        :page-sizes="[10, 20, 50, 100]"
+        show-size-picker
+        @update:page="(value: number) => emit('page-change', value)"
+        @update:page-size="(value: number) => emit('page-size-change', value)"
+      />
+    </div>
   </section>
 </template>
 
@@ -240,6 +243,24 @@ function createRowProps(row: TicketRecord) {
 
 .admin-table-shell__caption { color: var(--ink-soft); }
 
+.admin-pagination-wrap {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+}
+
+.admin-pagination__total {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  color: var(--ink);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .admin-table-shell__body {
   display: block;
   min-height: 0;
@@ -265,10 +286,8 @@ function createRowProps(row: TicketRecord) {
 
 .admin-pagination {
   display: flex;
-  flex-shrink: 0;
-  justify-content: flex-end;
   align-items: center;
-  min-height: 34px;
+  min-height: 28px;
 }
 
 .unassigned {
@@ -291,6 +310,6 @@ function createRowProps(row: TicketRecord) {
 @media (max-width: 768px) {
   .admin-table-shell__header { flex-direction: column; align-items: flex-start; }
   .admin-table-shell__actions { width: 100%; justify-content: space-between; }
-  .admin-pagination { justify-content: flex-start; }
+  .admin-pagination-wrap { justify-content: flex-start; align-items: center; flex-wrap: wrap; }
 }
 </style>

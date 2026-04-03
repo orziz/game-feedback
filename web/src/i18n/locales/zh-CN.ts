@@ -140,6 +140,7 @@ export default {
     queueEyebrow: 'TICKET QUEUE',
     queueTitle: '工单列表',
     queueDescription: '点击任一行查看详情并进行处理。',
+    queueTotal: '共 {count} 条',
     batchAssignButton: '批量指派 {count}',
     batchAssignTitle: '批量指派 {count} 条工单',
     batchAssignHint: '请选择一个管理员，系统会将当前选中的工单统一指派给该用户。分页、刷新或重新加载列表时会自动清空当前选择。',

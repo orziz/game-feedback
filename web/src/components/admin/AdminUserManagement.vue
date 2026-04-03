@@ -12,7 +12,8 @@ const { t } = useI18n()
 const message = useMessage()
 const dialog = useDialog()
 const adminStore = useAdminStore()
-const { usersLoading } = storeToRefs(adminStore)
+const { setUsersLoading, setUsers } = adminStore
+const { usersLoading, users } = storeToRefs(adminStore)
 
 type UiDataTableColumns<T> = DataTableColumns<T>
 const showCreateDialog = ref(false)
@@ -24,8 +25,6 @@ const showResetDialog = ref(false)
 const resetUserId = ref(0)
 const resetUsername = ref('')
 const resetNewPassword = ref('')
-
-const users = ref<AdminUser[]>([])
 
 const roleOptions = computed(() => [
   { label: t('admin.adminRole'), value: 'admin' },
@@ -96,14 +95,13 @@ onMounted(() => {
 
 async function loadUsers(): Promise<void> {
   try {
-    adminStore.usersLoading = true
+    setUsersLoading(true)
     const data = await api.admin.User.get.list()
-    users.value = data.users
-    adminStore.users = users.value
+    setUsers(data.users)
   } catch (error) {
     message.error(getErrorMessage(error, t('messages.userLoadFailed')))
   } finally {
-    adminStore.usersLoading = false
+    setUsersLoading(false)
   }
 }
 

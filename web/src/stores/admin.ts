@@ -48,6 +48,59 @@ export const useAdminStore = defineStore('admin', () => {
   const assignees = ref<AdminAssigneeUser[]>([])
   const usersLoading = ref(false)
 
+  function setUsersLoading(value: boolean): void {
+    usersLoading.value = value
+  }
+
+  function setUsers(value: AdminUser[]): void {
+    users.value = value
+  }
+
+  function setAssignees(value: AdminAssigneeUser[]): void {
+    assignees.value = value
+  }
+
+  function setTicketsLoading(value: boolean): void {
+    loading.value = value
+  }
+
+  function setUpdating(value: boolean): void {
+    updating.value = value
+  }
+
+  function setPage(value: number): void {
+    page.value = value
+  }
+
+  function setPageSize(value: number): void {
+    pageSize.value = value
+  }
+
+  function applyTicketListResponse(payload: { tickets: TicketRecord[]; total: number; page: number; pageSize: number }): void {
+    const maxPage = Math.max(1, Math.ceil(payload.total / payload.pageSize))
+    tickets.value = payload.tickets
+    total.value = payload.total
+    page.value = payload.page > maxPage ? maxPage : payload.page
+  }
+
+  function setSelectedTicket(ticketNo: string, ticket: TicketRecord | null): void {
+    selectedTicketNo.value = ticketNo
+    selectedTicket.value = ticket
+  }
+
+  function setTicketOperations(value: TicketOperation[]): void {
+    ticketOperations.value = value
+  }
+
+  function populateUpdateFormFromTicket(ticket: TicketRecord): void {
+    updateForm.value = {
+      status: ticket.status,
+      severity: ticket.type === 0 ? (ticket.severity ?? 1) : null,
+      adminNote: ticket.admin_note || '',
+      assignedTo: ticket.assigned_to || null,
+    }
+  }
+
   const isAuthenticated = computed(() => Boolean(token.value))
   const isSuperAdmin = computed(() => currentUser.value?.role === 'super_admin')
 
@@ -114,6 +167,11 @@ export const useAdminStore = defineStore('admin', () => {
     isAuthenticated, isSuperAdmin,
     users, usersLoading,
     assignees,
+    setUsersLoading, setUsers, setAssignees,
+    setTicketsLoading, setUpdating,
+    setPage, setPageSize,
+    applyTicketListResponse,
+    setSelectedTicket, setTicketOperations, populateUpdateFormFromTicket,
     restoreSession, login, logout,
   }
 })

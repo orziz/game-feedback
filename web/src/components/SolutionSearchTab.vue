@@ -178,6 +178,18 @@ function toggleExpanded(ticketNo: string): void {
   min-height: 0;
 }
 
+.query-line {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.result-count {
+  margin: 0 0 10px;
+  color: var(--ink-soft);
+}
+
 .solution-search__results {
   min-height: 0;
   overflow: auto;
@@ -308,19 +320,28 @@ function toggleExpanded(ticketNo: string): void {
   margin-bottom: 18px;
 }
 
-.ticket-detail-card {
-  border: 1px solid rgba(203, 213, 225, 0.9);
-  border-left-width: 6px;
-  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.08);
-}
-
 .ticket-detail-card__meta {
   display: grid;
   gap: 10px;
   margin: 0 0 18px;
 }
 
+.ticket-field,
+.ticket-section {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 10px 14px;
+  align-items: start;
+}
 
+.ticket-field__label,
+.ticket-section__label {
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ticket-field__value,
 .ticket-section__body {
   min-width: 0;
   line-height: 1.72;
@@ -329,42 +350,6 @@ function toggleExpanded(ticketNo: string): void {
 .multiline-text {
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-.severity-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 10px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.5;
-}
-
-.severity-badge--low {
-  color: #166534;
-  border-color: #86efac;
-  background: #f0fdf4;
-}
-
-.severity-badge--medium {
-  color: #a16207;
-  border-color: #fcd34d;
-  background: #fffbeb;
-}
-
-.severity-badge--high {
-  color: #c2410c;
-  border-color: #fdba74;
-  background: #fff7ed;
-}
-
-.severity-badge--critical {
-  color: #b91c1c;
-  border-color: #fca5a5;
-  background: #fef2f2;
-  box-shadow: inset 0 0 0 1px rgba(185, 28, 28, 0.1);
 }
 
 .ticket-state--pending {
@@ -400,6 +385,10 @@ function toggleExpanded(ticketNo: string): void {
 }
 
 @media (max-width: 768px) {
+  .query-line {
+    grid-template-columns: 1fr;
+  }
+
   .solution-search__card-main,
   .ticket-field,
   .ticket-section {
