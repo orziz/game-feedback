@@ -46,6 +46,36 @@ const isImageAttachment = computed(() => {
     || name.endsWith('.webp')
 })
 
+function isJsonBlob(blob: Blob): boolean {
+  return blob.type.includes('application/json')
+}
+
+async function assertDownloadableBlob(blob: Blob): Promise<Blob> {
+  if (isJsonBlob(blob)) {
+    const text = await blob.text()
+    const payload = JSON.parse(text) as Partial<ApiResponseBase>
+    throw new Error(payload.message || t('messages.attachmentDownloadFailed'))
+  }
+  if (blob.size === 0) {
+    throw new Error(t('messages.attachmentDownloadFailed'))
+  }
+  return blob
+}
+
+async function downloadAttachmentBlob(ticket: TicketRecord): Promise<Blob> {
+  const access = await api.admin.Ticket.get.attachmentUrl({ ticketNo: ticket.ticket_no })
+  if (access.mode === 'direct' && access.url) {
+    attachmentDirectUrl.value = access.url
+    const response = await fetch(access.url)
+    if (!response.ok) {
+      throw new Error(t('messages.attachmentDownloadFailed'))
+    }
+    return assertDownloadableBlob(await response.blob())
+  }
+
+  return assertDownloadableBlob(await api.admin.Ticket.getBlob.attachmentDownload({ ticketNo: ticket.ticket_no }))
+}
+
 function revokeImagePreviewUrl(): void {
   if (imagePreviewIsBlobUrl && imagePreviewUrl.value) {
     URL.revokeObjectURL(imagePreviewUrl.value)
@@ -75,16 +105,7 @@ async function loadImagePreview(ticket: TicketRecord | null): Promise<void> {
         imagePreviewIsBlobUrl = false
       }
     } else if (isImageAttachment.value) {
-      const blob = await api.admin.Ticket.getBlob.attachmentDownload({ ticketNo: ticket.ticket_no })
-      if (blob.type.includes('application/json')) {
-        const text = await blob.text()
-        const payload = JSON.parse(text) as Partial<ApiResponseBase>
-        throw new Error(payload.message || t('messages.attachmentDownloadFailed'))
-      }
-      if (blob.size === 0) {
-        throw new Error(t('messages.attachmentDownloadFailed'))
-      }
-      imagePreviewUrl.value = URL.createObjectURL(blob)
+      imagePreviewUrl.value = URL.createObjectURL(await downloadAttachmentBlob(ticket))
       imagePreviewIsBlobUrl = true
     }
   } catch (error) {
@@ -109,20 +130,7 @@ function handleDownloadAttachment(ticket: TicketRecord): void {
 
   void (async () => {
     try {
-      const access = await api.admin.Ticket.get.attachmentUrl({ ticketNo: ticket.ticket_no })
-      if (access.mode === 'direct' && access.url) {
-        attachmentDirectUrl.value = access.url
-        triggerUrlDownload(access.url, attachmentName)
-        return
-      }
-      const blob = await api.admin.Ticket.getBlob.attachmentDownload({ ticketNo: ticket.ticket_no })
-      if (blob.type.includes('application/json')) {
-        const text = await blob.text()
-        const payload = JSON.parse(text) as Partial<ApiResponseBase>
-        throw new Error(payload.message || t('messages.attachmentDownloadFailed'))
-      }
-      if (blob.size === 0) throw new Error(t('messages.attachmentDownloadFailed'))
-      triggerBlobDownload(blob, attachmentName)
+      triggerBlobDownload(await downloadAttachmentBlob(ticket), attachmentName)
     } catch (error) {
       message.error(getErrorMessage(error, t('messages.attachmentDownloadFailed')))
     }
@@ -194,7 +202,7 @@ onBeforeUnmount(() => {
               :src="imagePreviewUrl"
               :alt="ticket.attachment_name"
               object-fit="cover"
-              preview-disabled="false"
+              :preview-disabled="false"
               class="admin-detail-card__image-preview"
             />
             <div v-else-if="isImageAttachment && imagePreviewLoading" class="admin-detail-card__attachment-state">
