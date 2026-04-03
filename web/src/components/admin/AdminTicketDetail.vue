@@ -189,7 +189,14 @@ onBeforeUnmount(() => {
         <div v-if="ticket.attachment_name" class="admin-detail-row admin-detail-row--top">
           <div class="admin-detail-row__label">{{ t('common.attachment') }}</div>
           <div class="admin-detail-row__value admin-detail-card__attachment">
-            <img v-if="isImageAttachment && imagePreviewUrl" :src="imagePreviewUrl" :alt="ticket.attachment_name" class="admin-detail-card__image-preview">
+            <n-image
+              v-if="isImageAttachment && imagePreviewUrl"
+              :src="imagePreviewUrl"
+              :alt="ticket.attachment_name"
+              object-fit="cover"
+              preview-disabled="false"
+              class="admin-detail-card__image-preview"
+            />
             <div v-else-if="isImageAttachment && imagePreviewLoading" class="admin-detail-card__attachment-state">
               {{ t('common.loading') }}
             </div>
