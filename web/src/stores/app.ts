@@ -19,7 +19,7 @@ export const useAppStore = defineStore('app', () => {
   const initialized = ref(false)
   const uploadMode = ref<UploadMode>('off')
   const uploadMaxBytes = ref(defaultUploadMaxBytes)
-  const systemVersion = ref('1.0.0')
+  const systemVersion = ref('')
   const typeOptions = ref<EnumOption<FeedbackType>[]>([])
   const severityOptions = ref<EnumOption<Severity>[]>([])
   const statusOptions = ref<EnumOption<TicketStatus>[]>([])
@@ -67,7 +67,7 @@ export const useAppStore = defineStore('app', () => {
       isInstalled.value = false
       uploadMode.value = 'off'
       uploadMaxBytes.value = defaultUploadMaxBytes
-      systemVersion.value = '1.0.0'
+      systemVersion.value = ''
       message.error(getErrorMessage(error, t('messages.installStatusError')))
     } finally {
       checkingInstall.value = false
