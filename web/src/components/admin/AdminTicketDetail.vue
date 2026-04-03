@@ -7,7 +7,7 @@ import { api } from '@/api/client'
 import { useAppStore } from '@/stores/app'
 import { useAdminStore } from '@/stores/admin'
 import TicketMetaTag from '@/components/shared/TicketMetaTag.vue'
-import { triggerBlobDownload, triggerUrlDownload } from '@/utils/download'
+import { triggerBlobDownload } from '@/utils/download'
 import { getErrorMessage } from '@/utils/errors'
 
 const props = defineProps<{
@@ -120,11 +120,6 @@ function handleDownloadAttachment(ticket: TicketRecord): void {
   const attachmentName = ticket.attachment_name || ''
   if (!attachmentName) {
     message.warning(t('messages.attachmentNotFound'))
-    return
-  }
-
-  if (attachmentDirectUrl.value) {
-    triggerUrlDownload(attachmentDirectUrl.value, attachmentName)
     return
   }
 
