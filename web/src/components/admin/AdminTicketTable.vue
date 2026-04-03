@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, h } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { NCheckbox, NButton } from 'naive-ui'
+import { NCheckbox, NButton, NTag } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import TicketMetaTag from '@/components/shared/TicketMetaTag.vue'
 
@@ -123,10 +123,24 @@ const columns = computed<UiDataTableColumns<TicketRecord>>(() => [
     align: 'center',
     render: (row: TicketRecord) => {
       if (!row.assigned_to) {
-        return h('span', { class: 'assignee-pill assignee-pill--unassigned' }, t('common.unassigned'))
+        return h(NTag, {
+          size: 'small',
+          round: true,
+          bordered: false,
+          type: 'default',
+        }, {
+          default: () => t('common.unassigned'),
+        })
       }
       const assignedUsername = (row as TicketRecord & { assigned_username?: string | null }).assigned_username
-      return h('span', { class: 'assignee-pill assignee-pill--assigned' }, assignedUsername || String(row.assigned_to))
+      return h(NTag, {
+        size: 'small',
+        round: true,
+        bordered: false,
+        type: 'success',
+      }, {
+        default: () => assignedUsername || String(row.assigned_to),
+      })
     },
   },
   {
@@ -288,43 +302,6 @@ function createRowProps(row: TicketRecord) {
   display: flex;
   align-items: center;
   min-height: 28px;
-}
-
-.assignee-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 74px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.2;
-  white-space: nowrap;
-}
-
-.assignee-pill--assigned {
-  background: rgba(16, 185, 129, 0.14);
-  border-color: rgba(16, 185, 129, 0.28);
-  color: #047857;
-  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.04);
-}
-
-.assignee-pill--assigned::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  margin-right: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.9;
-}
-
-.assignee-pill--unassigned {
-  background: rgba(148, 163, 184, 0.12);
-  border-color: rgba(148, 163, 184, 0.26);
-  color: #64748b;
 }
 
 @media (max-width: 768px) {
