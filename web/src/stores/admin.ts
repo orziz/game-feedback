@@ -1,9 +1,9 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { ElMessage } from 'element-plus'
 import { i18n } from '@/i18n'
 import { api, setApiTokenGetter } from '@/api/client'
 import { getApiError, getErrorMessage } from '@/utils/errors'
+import { message } from '@/ui/discrete'
 
 const TOKEN_STORAGE_KEY = 'feedback-admin-token'
 
@@ -76,9 +76,9 @@ export const useAdminStore = defineStore('admin', () => {
       token.value = data.token
       currentUser.value = data.user
       writeStoredToken(data.token)
-      ElMessage.success(t('messages.adminLoginSuccess'))
+      message.success(t('messages.adminLoginSuccess'))
     } catch (error) {
-      ElMessage.error(getErrorMessage(error, t('messages.adminLoginFailed')))
+      message.error(getErrorMessage(error, t('messages.adminLoginFailed')))
       throw error
     } finally {
       loading.value = false
@@ -103,7 +103,7 @@ export const useAdminStore = defineStore('admin', () => {
     users.value = []
     assignees.value = []
     clearStoredToken()
-    if (showMessage) ElMessage.success(t('messages.adminLogoutSuccess'))
+    if (showMessage) message.success(t('messages.adminLogoutSuccess'))
   }
 
   return {

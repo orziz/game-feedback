@@ -4,10 +4,9 @@ import { getFeedbackTypeTagType, getStatusTagType } from '@/i18n'
 import { useAppStore } from '@/stores/app'
 
 type MetaKind = 'status' | 'type' | 'severity'
-
 type TagEffect = 'dark' | 'light' | 'plain'
 type TagSize = 'small' | 'default' | 'large'
-type ElTagType = 'primary' | 'success' | 'info' | 'warning' | 'danger'
+type NaiveTagType = 'default' | 'success' | 'info' | 'warning' | 'error'
 
 const props = withDefaults(defineProps<{
   kind: MetaKind
@@ -49,9 +48,9 @@ const label = computed(() => {
   return appStore.getSeverityLabel(normalizedValue.value as Severity)
 })
 
-const tagType = computed<ElTagType | undefined>(() => {
+const tagType = computed<NaiveTagType>(() => {
   if (normalizedValue.value === null) {
-    return undefined
+    return 'default'
   }
   if (props.kind === 'status') {
     return getStatusTagType(normalizedValue.value as TicketStatus)
@@ -59,7 +58,13 @@ const tagType = computed<ElTagType | undefined>(() => {
   if (props.kind === 'type') {
     return getFeedbackTypeTagType(normalizedValue.value as FeedbackType)
   }
-  return undefined
+  return 'default'
+})
+
+const naiveSize = computed<'small' | 'medium' | 'large'>(() => {
+  if (props.size === 'small') return 'small'
+  if (props.size === 'large') return 'large'
+  return 'medium'
 })
 
 const severityClass = computed(() => {
@@ -75,27 +80,35 @@ const severityClass = computed(() => {
 
 <template>
   <span v-if="!hasValue" class="ticket-meta-tag__fallback">{{ fallbackText }}</span>
-  <el-tag
+  <n-tag
     v-else
     :type="tagType"
-    :effect="effect"
-    :size="size"
+    :size="naiveSize"
     :round="round"
+    :bordered="effect !== 'dark'"
     class="ticket-meta-tag"
-    :class="severityClass"
+    :class="[severityClass, `ticket-meta-tag--${effect}`]"
   >
     {{ label }}
-  </el-tag>
+  </n-tag>
 </template>
 
 <style scoped>
-.ticket-meta-tag :deep(.el-tag__content) {
+.ticket-meta-tag {
   letter-spacing: 0;
 }
 
 .ticket-meta-tag__fallback {
   color: var(--ink-soft);
   font-size: 12px;
+}
+
+.ticket-meta-tag--dark {
+  font-weight: 700;
+}
+
+.ticket-meta-tag--plain {
+  background: rgba(255, 255, 255, 0.82);
 }
 
 .ticket-meta-tag--severity-low {

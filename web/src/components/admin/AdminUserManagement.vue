@@ -1,20 +1,24 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { storeToRefs } from 'pinia'
+import { useMessage, useDialog, NButton } from 'naive-ui'
 import { api } from '@/api/client'
 import { useAdminStore } from '@/stores/admin'
-import { storeToRefs } from 'pinia'
 import { getErrorMessage } from '@/utils/errors'
+import type { DataTableColumns } from 'naive-ui'
 
 const { t } = useI18n()
+const message = useMessage()
+const dialog = useDialog()
 const adminStore = useAdminStore()
 const { usersLoading } = storeToRefs(adminStore)
 
+type UiDataTableColumns<T> = DataTableColumns<T>
 const showCreateDialog = ref(false)
 const newUsername = ref('')
 const newPassword = ref('')
-const newRole = ref('admin')
+const newRole = ref<'admin' | 'super_admin'>('admin')
 
 const showResetDialog = ref(false)
 const resetUserId = ref(0)
@@ -22,6 +26,69 @@ const resetUsername = ref('')
 const resetNewPassword = ref('')
 
 const users = ref<AdminUser[]>([])
+
+const roleOptions = computed(() => [
+  { label: t('admin.adminRole'), value: 'admin' },
+  { label: t('admin.superAdmin'), value: 'super_admin' },
+])
+
+const columns = computed<UiDataTableColumns<AdminUser>>(() => [
+  {
+    key: 'id',
+    title: 'ID',
+    width: 70,
+    render: (row) => row.id,
+  },
+  {
+    key: 'username',
+    title: t('admin.usernameCol'),
+    render: (row) => row.username,
+  },
+  {
+    key: 'role',
+    title: t('admin.roleCol'),
+    width: 140,
+    render: (row) => h('span', {
+      class: ['user-management__role-pill', row.role === 'super_admin' ? 'is-super-admin' : 'is-admin'],
+    }, roleLabel(row.role)),
+  },
+  {
+    key: 'created_at',
+    title: t('common.createdAt'),
+    width: 180,
+    render: (row) => row.created_at,
+  },
+  {
+    key: 'actions',
+    title: t('admin.actionsCol'),
+    width: 252,
+    render: (row) => h('div', { class: 'user-management__actions' }, [
+      h(NButton, {
+        class: 'user-management__action-btn user-management__action-btn--reset',
+        size: 'small',
+        strong: true,
+        secondary: true,
+        round: true,
+        onClick: () => openResetDialog(row),
+      }, {
+        default: () => t('admin.userResetPassword'),
+      }),
+      row.role !== 'super_admin'
+        ? h(NButton, {
+          class: 'user-management__action-btn user-management__action-btn--danger',
+          size: 'small',
+          strong: true,
+          secondary: true,
+          type: 'error',
+          round: true,
+          onClick: () => { void handleDelete(row) },
+        }, {
+          default: () => t('admin.userDelete'),
+        })
+        : null,
+    ]),
+  },
+])
 
 onMounted(() => {
   void loadUsers()
@@ -34,7 +101,7 @@ async function loadUsers(): Promise<void> {
     users.value = data.users
     adminStore.users = users.value
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('messages.userLoadFailed')))
+    message.error(getErrorMessage(error, t('messages.userLoadFailed')))
   } finally {
     adminStore.usersLoading = false
   }
@@ -47,31 +114,38 @@ async function handleCreate(): Promise<void> {
       password: newPassword.value,
       role: newRole.value,
     })
-    ElMessage.success(t('messages.userCreateSuccess'))
+    message.success(t('messages.userCreateSuccess'))
     showCreateDialog.value = false
     newUsername.value = ''
     newPassword.value = ''
     newRole.value = 'admin'
     await loadUsers()
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('messages.userCreateFailed')))
+    message.error(getErrorMessage(error, t('messages.userCreateFailed')))
   }
 }
 
 async function handleDelete(user: AdminUser): Promise<void> {
   try {
-    await ElMessageBox.confirm(
-      t('admin.userDeleteConfirm', { username: user.username }),
-      t('admin.userDeleteTitle'),
-      { confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel'), type: 'warning' },
-    )
+    await new Promise<void>((resolve, reject) => {
+      dialog.warning({
+        title: t('admin.userDeleteTitle'),
+        content: t('admin.userDeleteConfirm', { username: user.username }),
+        positiveText: t('common.confirm'),
+        negativeText: t('common.cancel'),
+        autoFocus: false,
+        maskClosable: false,
+        onPositiveClick: () => resolve(),
+        onNegativeClick: () => reject(new Error('cancelled')),
+        onClose: () => reject(new Error('cancelled')),
+      })
+    })
     await api.admin.User.post.delete({ id: user.id })
-    ElMessage.success(t('messages.userDeleteSuccess'))
+    message.success(t('messages.userDeleteSuccess'))
     await loadUsers()
-  } catch (error: any) {
-    if (error?.message !== 'User cancelled confirmation') {
-      ElMessage.error(getErrorMessage(error, t('messages.userDeleteFailed')))
-    }
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message === 'cancelled') return
+    message.error(getErrorMessage(error, t('messages.userDeleteFailed')))
   }
 }
 
@@ -85,10 +159,10 @@ function openResetDialog(user: AdminUser): void {
 async function handleResetPassword(): Promise<void> {
   try {
     await api.admin.User.post.resetPassword({ id: resetUserId.value, password: resetNewPassword.value })
-    ElMessage.success(t('messages.userResetPasswordSuccess'))
+    message.success(t('messages.userResetPasswordSuccess'))
     showResetDialog.value = false
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('messages.userResetPasswordFailed')))
+    message.error(getErrorMessage(error, t('messages.userResetPasswordFailed')))
   }
 }
 
@@ -100,85 +174,154 @@ function roleLabel(role: string): string {
 <template>
   <div class="user-management">
     <div class="user-management__header">
-      <el-button type="primary" size="small" @click="showCreateDialog = true">
+      <p class="user-management__summary">{{ t('admin.userCount', { count: users.length }) }}</p>
+      <n-button type="primary" size="small" @click="showCreateDialog = true">
         {{ t('admin.userCreate') }}
-      </el-button>
+      </n-button>
     </div>
 
-    <el-table :data="users" :v-loading="adminStore.usersLoading" stripe style="width: 100%">
-      <el-table-column prop="id" label="ID" width="70" />
-      <el-table-column prop="username" :label="t('admin.usernameCol')" />
-      <el-table-column :label="t('admin.roleCol')" width="140">
-        <template #default="{ row }">
-          <el-tag :type="row.role === 'super_admin' ? 'warning' : 'info'" size="small">
-            {{ roleLabel(row.role) }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="created_at" :label="t('common.createdAt')" width="180" />
-      <el-table-column :label="t('admin.actionsCol')" width="200">
-        <template #default="{ row }">
-          <el-button size="small" @click="openResetDialog(row)">
-            {{ t('admin.userResetPassword') }}
-          </el-button>
-          <el-button
-            v-if="row.role !== 'super_admin'"
-            size="small"
-            type="danger"
-            @click="handleDelete(row)"
-          >
-            {{ t('admin.userDelete') }}
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <div class="user-management__table-shell">
+      <n-data-table
+        :columns="columns"
+        :data="users"
+        :loading="usersLoading"
+        :bordered="false"
+        :single-line="false"
+        :row-key="(row: AdminUser) => row.id"
+        size="small"
+      />
+    </div>
 
-    <!-- 创建用户对话框 -->
-    <el-dialog v-model="showCreateDialog" :title="t('admin.userCreate')" width="420px" destroy-on-close>
-      <el-form label-width="90px">
-        <el-form-item :label="t('admin.usernameCol')">
-          <el-input v-model="newUsername" :placeholder="t('admin.usernamePlaceholder')" />
-        </el-form-item>
-        <el-form-item :label="t('admin.passwordCol')">
-          <el-input v-model="newPassword" type="password" show-password :placeholder="t('admin.passwordPlaceholder')" />
-        </el-form-item>
-        <el-form-item :label="t('admin.roleCol')">
-          <el-select v-model="newRole">
-            <el-option :label="t('admin.adminRole')" value="admin" />
-            <el-option :label="t('admin.superAdmin')" value="super_admin" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showCreateDialog = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleCreate">{{ t('common.confirm') }}</el-button>
-      </template>
-    </el-dialog>
+    <n-modal v-model:show="showCreateDialog" :style="{ width: '420px', maxWidth: 'calc(100vw - 32px)' }">
+      <n-card :title="t('admin.userCreate')" closable @close="showCreateDialog = false">
+        <n-form label-placement="left" label-width="90" class="user-management__form">
+          <n-form-item :label="t('admin.usernameCol')">
+            <n-input v-model:value="newUsername" :placeholder="t('admin.usernamePlaceholder')" />
+          </n-form-item>
+          <n-form-item :label="t('admin.passwordCol')">
+            <n-input v-model:value="newPassword" type="password" show-password-on="click" :placeholder="t('admin.passwordPlaceholder')" />
+          </n-form-item>
+          <n-form-item :label="t('admin.roleCol')">
+            <n-select v-model:value="newRole" :options="roleOptions" />
+          </n-form-item>
+        </n-form>
 
-    <!-- 重置密码对话框 -->
-    <el-dialog v-model="showResetDialog" :title="t('admin.userResetPasswordTitle', { username: resetUsername })" width="400px" destroy-on-close>
-      <el-form label-width="80px">
-        <el-form-item :label="t('admin.newPasswordCol')">
-          <el-input v-model="resetNewPassword" type="password" show-password :placeholder="t('admin.newPasswordPlaceholder')" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showResetDialog = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleResetPassword">{{ t('common.confirm') }}</el-button>
-      </template>
-    </el-dialog>
+        <div class="user-management__modal-footer">
+          <n-button @click="showCreateDialog = false">{{ t('common.cancel') }}</n-button>
+          <n-button type="primary" @click="handleCreate">{{ t('common.confirm') }}</n-button>
+        </div>
+      </n-card>
+    </n-modal>
+
+    <n-modal v-model:show="showResetDialog" :style="{ width: '400px', maxWidth: 'calc(100vw - 32px)' }">
+      <n-card :title="t('admin.userResetPasswordTitle', { username: resetUsername })" closable @close="showResetDialog = false">
+        <n-form label-placement="left" label-width="80" class="user-management__form">
+          <n-form-item :label="t('admin.newPasswordCol')">
+            <n-input v-model:value="resetNewPassword" type="password" show-password-on="click" :placeholder="t('admin.newPasswordPlaceholder')" />
+          </n-form-item>
+        </n-form>
+
+        <div class="user-management__modal-footer">
+          <n-button @click="showResetDialog = false">{{ t('common.cancel') }}</n-button>
+          <n-button type="primary" @click="handleResetPassword">{{ t('common.confirm') }}</n-button>
+        </div>
+      </n-card>
+    </n-modal>
   </div>
 </template>
 
 <style scoped>
 .user-management {
   display: flex;
+  flex: 1;
+  min-height: 0;
   flex-direction: column;
   gap: 16px;
 }
 
 .user-management__header {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.user-management__summary {
+  margin: 0;
+  color: #215562;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.1);
+}
+
+.user-management__table-shell {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 118, 110, 0.08);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.user-management__table-shell :deep(.n-data-table) {
+  min-width: 680px;
+}
+
+.user-management__actions {
+  display: flex;
   justify-content: flex-end;
+  gap: 8px;
+}
+
+.user-management__role-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.user-management__role-pill.is-super-admin {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+}
+
+.user-management__role-pill.is-admin {
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+}
+
+.user-management__action-btn {
+  min-width: 94px;
+  font-weight: 700;
+}
+
+.user-management__action-btn--reset {
+  --n-text-color: #0f766e !important;
+  --n-text-color-hover: #0b655f !important;
+  --n-text-color-pressed: #0a5752 !important;
+  --n-border: 1px solid rgba(15, 118, 110, 0.32) !important;
+  --n-border-hover: 1px solid rgba(15, 118, 110, 0.48) !important;
+  --n-border-pressed: 1px solid rgba(15, 118, 110, 0.58) !important;
+  --n-color: rgba(15, 118, 110, 0.08) !important;
+  --n-color-hover: rgba(15, 118, 110, 0.14) !important;
+  --n-color-pressed: rgba(15, 118, 110, 0.2) !important;
+}
+
+.user-management__modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+@media (max-width: 768px) {
+  .user-management__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>

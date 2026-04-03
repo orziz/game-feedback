@@ -46,6 +46,10 @@ final class Ticket extends AdminSubModule
                 self::META_METHODS => ['POST'],
                 self::META_AUTH => self::AUTH_ADMIN,
             ],
+            'batchAssign' => [
+                self::META_METHODS => ['POST'],
+                self::META_AUTH => self::AUTH_ADMIN,
+            ],
             'getOperations' => [
                 self::META_METHODS => ['GET'],
                 self::META_AUTH => self::AUTH_ADMIN,
@@ -426,6 +430,89 @@ final class Ticket extends AdminSubModule
 
         // 本地存储或未开启直连：让前端走代理下载
         Responder::send(['ok' => true, 'mode' => 'proxy']);
+    }
+
+    protected function batchAssign(): void
+    {
+        $currentUser = $this->currentAdminUser();
+        $payload = Request::jsonBody();
+
+        $ticketNosRaw = isset($payload['ticketNos']) && is_array($payload['ticketNos'])
+            ? $payload['ticketNos']
+            : [];
+        $assignToId = array_key_exists('assignedTo', $payload) && $payload['assignedTo'] !== null
+            ? $this->sanitizer->parseInt((string)$payload['assignedTo'], 1, 9999999999)
+            : null;
+
+        if ($ticketNosRaw === []) {
+            Responder::error('MISSING_TICKETS', '至少需要选择一条工单。', 422);
+        }
+
+        $ticketNos = [];
+        foreach ($ticketNosRaw as $ticketNoRaw) {
+            $ticketNo = $this->sanitizer->sanitizeSingleLine((string)$ticketNoRaw, 32);
+            if ($ticketNo === '' || !$this->sanitizer->isValidTicketNo($ticketNo)) {
+                Responder::error('INVALID_TICKET_NO', '存在格式不正确的工单号。', 422);
+            }
+            $ticketNos[] = $ticketNo;
+        }
+        $ticketNos = array_values(array_unique($ticketNos));
+
+        if (count($ticketNos) > 100) {
+            Responder::error('TOO_MANY_TICKETS', '单次最多只能批量指派 100 条工单。', 422);
+        }
+
+        if ($assignToId === null) {
+            Responder::error('MISSING_ASSIGNEE', '请选择指派对象。', 422);
+        }
+
+        $userRepo = $this->createUserRepository();
+        $assignee = $userRepo->findById($assignToId);
+        if (!$assignee) {
+            Responder::error('USER_NOT_FOUND', '指派的用户不存在。', 404);
+        }
+
+        $repo = $this->createTicketRepository();
+        $tickets = $repo->findTicketsByNos($ticketNos);
+        if (count($tickets) !== count($ticketNos)) {
+            Responder::error('TICKET_NOT_FOUND', '部分工单不存在或已被删除。', 404);
+        }
+
+        $assignedUsername = (string)($assignee['username'] ?? '');
+        $newAssignedLabel = $assignedUsername !== ''
+            ? $assignedUsername . ' (#' . $assignToId . ')'
+            : '用户#' . $assignToId;
+        $updatedAt = date('Y-m-d H:i:s');
+
+        $repo->assignTickets($ticketNos, $assignToId, $updatedAt);
+
+        foreach ($ticketNos as $ticketNo) {
+            $ticket = $tickets[$ticketNo];
+            $oldAssignedTo = (int)($ticket['assigned_to'] ?? 0);
+            $oldAssignedLabel = null;
+            if ($oldAssignedTo > 0) {
+                $oldAssignee = $userRepo->findById($oldAssignedTo);
+                $oldAssigneeUsername = $oldAssignee ? (string)($oldAssignee['username'] ?? '') : '';
+                $oldAssignedLabel = $oldAssigneeUsername !== ''
+                    ? $oldAssigneeUsername . ' (#' . $oldAssignedTo . ')'
+                    : '用户#' . $oldAssignedTo;
+            }
+
+            $repo->recordOperation(
+                $ticketNo,
+                (int)$currentUser['id'],
+                (string)$currentUser['username'],
+                'assign',
+                $oldAssignedLabel,
+                $newAssignedLabel
+            );
+        }
+
+        Responder::send([
+            'ok' => true,
+            'affected' => count($ticketNos),
+            'message' => '批量指派成功。',
+        ]);
     }
 
     private function resolveConfigFlag(string $key, bool $default): bool

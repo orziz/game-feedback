@@ -13,6 +13,7 @@ declare namespace API.Admin.Ticket {
     post: {
       update: API.Meta.Post<HttpParams.Update, ApiResponseBase>
       assign: API.Meta.Post<HttpParams.Assign, ApiResponseBase>
+      batchAssign: API.Meta.Post<HttpParams.BatchAssign, BatchAssignResponse>
     }
   }
 
@@ -45,6 +46,11 @@ declare namespace API.Admin.Ticket {
     interface Assign {
       ticketNo: string
       assignedTo: number | null
+    }
+
+    interface BatchAssign {
+      ticketNos: string[]
+      assignedTo: number
     }
 
     interface GetOperations {
@@ -118,4 +124,8 @@ interface AdminOperationsResponse extends ApiResponseBase {
 interface AttachmentUrlResponse extends ApiResponseBase {
   mode: 'direct' | 'proxy'
   url?: string
+}
+
+interface BatchAssignResponse extends ApiResponseBase {
+  affected: number
 }

@@ -362,6 +362,78 @@ SQL;
     }
 
     /**
+     * 批量查询工单（按工单号）
+     *
+     * @param array<int, string> $ticketNos 工单号列表
+     * @return array<string, array<string, mixed>> 以 ticket_no 为键的工单数据
+     */
+    public function findTicketsByNos(array $ticketNos): array
+    {
+        if ($ticketNos === []) {
+            return [];
+        }
+
+        $placeholders = [];
+        $params = [];
+        foreach (array_values($ticketNos) as $index => $ticketNo) {
+            $key = ':ticket_no_' . $index;
+            $placeholders[] = $key;
+            $params[$key] = $ticketNo;
+        }
+
+        $stmt = $this->pdo->prepare(
+            'SELECT ticket_no, assigned_to FROM feedback_tickets WHERE ticket_no IN (' . implode(', ', $placeholders) . ')'
+        );
+        $stmt->execute($params);
+
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $result = [];
+        foreach ($rows as $row) {
+            $ticketNo = (string)($row['ticket_no'] ?? '');
+            if ($ticketNo !== '') {
+                $result[$ticketNo] = $row;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * 批量指派工单
+     *
+     * @param array<int, string> $ticketNos 工单号列表
+     * @param int|null           $assignedTo 目标用户 ID（null 表示取消指派）
+     * @param string             $updatedAt 更新时间
+     * @return int 受影响的工单数量
+     */
+    public function assignTickets(array $ticketNos, ?int $assignedTo, string $updatedAt): int
+    {
+        if ($ticketNos === []) {
+            return 0;
+        }
+
+        $placeholders = [];
+        $params = [
+            ':assigned_to' => $assignedTo,
+            ':updated_at' => $updatedAt,
+        ];
+
+        foreach (array_values($ticketNos) as $index => $ticketNo) {
+            $key = ':ticket_no_' . $index;
+            $placeholders[] = $key;
+            $params[$key] = $ticketNo;
+        }
+
+        $stmt = $this->pdo->prepare(
+            'UPDATE feedback_tickets SET assigned_to = :assigned_to, updated_at = :updated_at ' .
+            'WHERE ticket_no IN (' . implode(', ', $placeholders) . ')'
+        );
+        $stmt->execute($params);
+
+        return $stmt->rowCount();
+    }
+
+    /**
      * 记录工单操作日志到 ticket_operations 表
      *
      * @param string      $ticketNo      工单号

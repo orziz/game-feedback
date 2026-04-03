@@ -1,23 +1,141 @@
 <script setup lang="ts">
+import { computed, h } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { NCheckbox, NButton } from 'naive-ui'
+import type { DataTableColumns } from 'naive-ui'
 import TicketMetaTag from '@/components/shared/TicketMetaTag.vue'
 
-defineProps<{
-  tickets:  TicketRecord[]
-  loading:  boolean
-  page:     number
+const props = defineProps<{
+  tickets: TicketRecord[]
+  loading: boolean
+  page: number
   pageSize: number
-  total:    number
+  total: number
+  checkedTicketNos: string[]
+  canBatchAssign: boolean
 }>()
 
 const emit = defineEmits<{
-  select:            [ticketNo: string]
-  'page-change':     [page: number]
-  'page-size-change':[size: number]
+  select: [ticketNo: string]
+  'page-change': [page: number]
+  'page-size-change': [size: number]
+  'toggle-ticket-checked': [payload: { ticketNo: string; checked: boolean; shiftKey: boolean }]
+  'toggle-all-tickets-checked': [checked: boolean]
+  'batch-assign': []
 }>()
 
 const { t } = useI18n()
 const bugType: FeedbackType = 0
+
+type UiDataTableColumns<T> = DataTableColumns<T>
+let lastShiftKey = false
+
+const isAllChecked = computed(() => props.tickets.length > 0 && props.tickets.every((ticket) => props.checkedTicketNos.includes(ticket.ticket_no)))
+const isPartiallyChecked = computed(() => props.checkedTicketNos.length > 0 && !isAllChecked.value)
+
+const columns = computed<UiDataTableColumns<TicketRecord>>(() => [
+  {
+    key: 'selection',
+    width: 48,
+    align: 'center',
+    title: () => h(NCheckbox, {
+      checked: isAllChecked.value,
+      indeterminate: isPartiallyChecked.value,
+      onUpdateChecked: (checked: boolean) => emit('toggle-all-tickets-checked', checked),
+      onClick: (event: MouseEvent) => event.stopPropagation(),
+    }),
+    render: (row: TicketRecord) => h(NCheckbox, {
+      checked: props.checkedTicketNos.includes(row.ticket_no),
+      onUpdateChecked: (checked: boolean) => emit('toggle-ticket-checked', {
+        ticketNo: row.ticket_no,
+        checked,
+        shiftKey: lastShiftKey,
+      }),
+      onClick: (event: MouseEvent) => {
+        lastShiftKey = event.shiftKey
+        event.stopPropagation()
+      },
+    }),
+  },
+  {
+    key: 'ticket_no',
+    title: t('admin.ticketIdCol'),
+    minWidth: 170,
+    ellipsis: true,
+    render: (row: TicketRecord) => row.ticket_no,
+  },
+  {
+    key: 'type',
+    title: t('admin.typeCol'),
+    width: 92,
+    align: 'center',
+    render: (row: TicketRecord) => h(TicketMetaTag, { kind: 'type', value: row.type }),
+  },
+  {
+    key: 'severity',
+    title: t('admin.severityCol'),
+    width: 98,
+    align: 'center',
+    render: (row: TicketRecord) => (
+      row.type === bugType
+        ? h(TicketMetaTag, { kind: 'severity', value: row.severity })
+        : h('span', '--')
+    ),
+  },
+  {
+    key: 'title',
+    title: t('admin.titleCol'),
+    minWidth: 220,
+    ellipsis: { tooltip: true },
+    render: (row: TicketRecord) => row.title,
+  },
+  {
+    key: 'contact',
+    title: t('admin.contactCol'),
+    minWidth: 160,
+    ellipsis: { tooltip: true },
+    render: (row: TicketRecord) => row.contact || '--',
+  },
+  {
+    key: 'assigned_username',
+    title: t('admin.assignedToCol'),
+    width: 100,
+    align: 'center',
+    render: (row: TicketRecord) => {
+      if (!row.assigned_to) {
+        return h('span', { class: 'unassigned' }, t('common.unassigned'))
+      }
+      const assignedUsername = (row as TicketRecord & { assigned_username?: string | null }).assigned_username
+      return h('span', { class: 'assigned-user' }, assignedUsername || String(row.assigned_to))
+    },
+  },
+  {
+    key: 'status',
+    title: t('admin.statusCol'),
+    width: 100,
+    align: 'center',
+    render: (row: TicketRecord) => h(TicketMetaTag, { kind: 'status', value: row.status, effect: 'dark' }),
+  },
+  {
+    key: 'created_at',
+    title: t('admin.createdAtCol'),
+    width: 180,
+    render: (row: TicketRecord) => row.created_at,
+  },
+  {
+    key: 'updated_at',
+    title: t('admin.updatedAtCol'),
+    width: 180,
+    render: (row: TicketRecord) => row.updated_at,
+  },
+])
+
+function createRowProps(row: TicketRecord) {
+  return {
+    style: 'cursor: pointer;',
+    onClick: () => emit('select', row.ticket_no),
+  }
+}
 </script>
 
 <template>
@@ -27,70 +145,50 @@ const bugType: FeedbackType = 0
         <p class="admin-table-shell__eyebrow">{{ t('admin.queueEyebrow') }}</p>
         <h3>{{ t('admin.queueTitle') }}</h3>
       </div>
-      <p class="admin-table-shell__caption">{{ t('admin.queueDescription') }}</p>
+      <div class="admin-table-shell__actions">
+        <p class="admin-table-shell__caption">{{ t('admin.queueDescription') }}</p>
+        <n-button size="small" type="primary" secondary :disabled="!canBatchAssign" @click="emit('batch-assign')">
+          {{ t('admin.batchAssignButton', { count: checkedTicketNos.length }) }}
+        </n-button>
+      </div>
     </div>
 
     <div class="admin-table-shell__body">
-      <el-table
+      <n-data-table
+        :columns="columns"
         :data="tickets"
-        stripe
-        height="100%"
+        :loading="loading"
+        :bordered="false"
+        :single-line="false"
+        :row-key="(row: TicketRecord) => row.ticket_no"
+        :row-props="createRowProps"
+        striped
         size="small"
-        v-loading="loading"
         class="admin-table"
-        @row-click="(row: TicketRecord) => emit('select', row.ticket_no)"
-      >
-        <el-table-column prop="ticket_no" :label="t('admin.ticketIdCol')" min-width="170" />
-        <el-table-column prop="type" :label="t('admin.typeCol')" width="92" align="center" header-align="center">
-          <template #default="{ row }">
-            <TicketMetaTag kind="type" :value="row.type" />
-          </template>
-        </el-table-column>
-        <el-table-column prop="severity" :label="t('admin.severityCol')" width="98" align="center" header-align="center">
-          <template #default="{ row }">
-            <TicketMetaTag v-if="row.type === bugType" kind="severity" :value="row.severity" />
-            <span v-else>--</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="title"    :label="t('admin.titleCol')"    min-width="220" show-overflow-tooltip />
-        <el-table-column prop="contact"  :label="t('admin.contactCol')"  min-width="160" show-overflow-tooltip />
-        <el-table-column prop="assigned_username" :label="t('admin.assignedToCol')" width="100" align="center" header-align="center">
-          <template #default="{ row }">
-            <span v-if="!row.assigned_to" class="unassigned">{{ t('common.unassigned') }}</span>
-            <span v-else class="assigned-user">{{ row.assigned_username }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="status"   :label="t('admin.statusCol')"   width="100" align="center" header-align="center">
-          <template #default="{ row }">
-            <TicketMetaTag kind="status" :value="row.status" effect="dark" />
-          </template>
-        </el-table-column>
-        <el-table-column prop="created_at" :label="t('admin.createdAtCol')" width="180" />
-        <el-table-column prop="updated_at" :label="t('admin.updatedAtCol')" width="180" />
-      </el-table>
+      />
     </div>
 
-    <el-pagination
+    <n-pagination
       class="admin-pagination"
       size="small"
-      layout="total, sizes, prev, pager, next"
-      :current-page="page"
+      :page="page"
       :page-size="pageSize"
-      :total="total"
+      :item-count="total"
       :page-sizes="[10, 20, 50, 100]"
-      @current-change="(v: number) => emit('page-change', v)"
-      @size-change="(v: number) => emit('page-size-change', v)"
+      show-size-picker
+      @update:page="(value: number) => emit('page-change', value)"
+      @update:page-size="(value: number) => emit('page-size-change', value)"
     />
   </section>
 </template>
 
 <style scoped>
 .admin-table-shell {
-  display: flex;
+  display: grid;
   flex: 1;
   height: 100%;
   min-height: 0;
-  flex-direction: column;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 14px;
   overflow: hidden;
 }
@@ -99,6 +197,12 @@ const bugType: FeedbackType = 0
   display: flex;
   align-items: end;
   justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-table-shell__actions {
+  display: flex;
+  align-items: center;
   gap: 12px;
 }
 
@@ -115,24 +219,31 @@ const bugType: FeedbackType = 0
 }
 
 .admin-table-shell__caption { color: var(--ink-soft); }
+
 .admin-table-shell__body {
-  display: flex;
-  flex: 1;
+  display: block;
   min-height: 0;
-  overflow: hidden;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 118, 110, 0.08);
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .admin-table {
   width: 100%;
-  flex: 1;
-  min-height: 0;
 }
-.admin-table :deep(.el-table__inner-wrapper) { height: 100%; }
+
+.admin-table-shell__body :deep(.n-data-table) {
+  min-width: 1120px;
+}
+
 .admin-pagination {
   display: flex;
   flex-shrink: 0;
   justify-content: flex-end;
-  margin-top: auto;
+  align-items: center;
+  min-height: 34px;
 }
 
 .unassigned {
@@ -148,12 +259,13 @@ const bugType: FeedbackType = 0
   font-size: 12px;
   background: #dbeafe;
   color: #1e40af;
-  border-radius: 3px;
-  font-weight: 500;
+  border-radius: 999px;
+  font-weight: 600;
 }
 
 @media (max-width: 768px) {
   .admin-table-shell__header { flex-direction: column; align-items: flex-start; }
+  .admin-table-shell__actions { width: 100%; justify-content: space-between; }
   .admin-pagination { justify-content: flex-start; }
 }
 </style>

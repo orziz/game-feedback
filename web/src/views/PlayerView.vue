@@ -13,20 +13,54 @@ const { activeTab, isInstalled, checkingInstall } = storeToRefs(appStore)
 
 <template>
   <section class="view-shell">
-    <el-skeleton v-if="checkingInstall" :rows="6" animated class="panel view-shell__placeholder" />
+    <section v-if="checkingInstall" class="panel view-shell__placeholder view-shell__placeholder--skeleton">
+      <n-skeleton v-for="index in 6" :key="index" text :sharp="false" class="view-shell__skeleton-line" />
+    </section>
 
     <InstallPanel v-else-if="!isInstalled" class="view-shell__panel" />
 
     <section v-else class="panel main-panel view-shell__panel">
-      <el-tabs v-model="activeTab" type="card" class="desk-tabs">
-        <el-tab-pane :label="t('tabs.submit')" name="submit">
+      <n-tabs v-model:value="activeTab" type="segment" class="desk-tabs">
+        <n-tab-pane :tab="t('tabs.submit')" name="submit">
           <SubmitTab />
-        </el-tab-pane>
+        </n-tab-pane>
 
-        <el-tab-pane :label="t('tabs.solutionSearch')" name="solution-search">
+        <n-tab-pane :tab="t('tabs.solutionSearch')" name="solution-search">
           <SolutionSearchTab />
-        </el-tab-pane>
-      </el-tabs>
+        </n-tab-pane>
+      </n-tabs>
     </section>
   </section>
 </template>
+
+<style scoped>
+.view-shell__placeholder--skeleton {
+  display: grid;
+  gap: 14px;
+  padding: 24px;
+}
+
+.view-shell__skeleton-line:nth-child(1) {
+  width: 42%;
+}
+
+.view-shell__skeleton-line:nth-child(2) {
+  width: 100%;
+}
+
+.view-shell__skeleton-line:nth-child(3) {
+  width: 88%;
+}
+
+.view-shell__skeleton-line:nth-child(4) {
+  width: 93%;
+}
+
+.view-shell__skeleton-line:nth-child(5) {
+  width: 78%;
+}
+
+.view-shell__skeleton-line:nth-child(6) {
+  width: 68%;
+}
+</style>

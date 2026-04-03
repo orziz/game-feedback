@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
+import { useMessage } from 'naive-ui'
 import { api } from '@/api/client'
 import { getErrorMessage } from '@/utils/errors'
 import TicketProgress from './TicketProgress.vue'
 import TicketMetaTag from '@/components/shared/TicketMetaTag.vue'
 
 const { t } = useI18n()
+const message = useMessage()
 const keyword   = ref('')
 const searching = ref(false)
 const results   = ref<TicketSearchResponse['tickets']>([])
@@ -25,7 +26,7 @@ function isTicketNoKeyword(value: string): boolean {
 
 async function handleSearch(): Promise<void> {
   if (!keyword.value.trim()) {
-    ElMessage.warning(t('messages.keywordRequired'))
+    message.warning(t('messages.keywordRequired'))
     return
   }
   const trimmedKeyword = keyword.value.trim()
@@ -43,7 +44,7 @@ async function handleSearch(): Promise<void> {
       ? results.value.map((ticket) => ticket.ticket_no)
       : []
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('messages.contentSearchFailed')))
+    message.error(getErrorMessage(error, t('messages.contentSearchFailed')))
   } finally {
     searching.value = false
   }
@@ -71,33 +72,35 @@ function toggleExpanded(ticketNo: string): void {
 </script>
 
 <template>
-  <div class="query-line">
-    <el-input
-      v-model="keyword"
-      :placeholder="t('solutionSearch.placeholder')"
-      @keyup.enter="handleSearch"
-    />
-    <el-button type="success" :loading="searching" @click="handleSearch">
-      {{ t('solutionSearch.button') }}
-    </el-button>
-  </div>
+  <div class="solution-search">
+    <div class="query-line">
+      <n-input
+        v-model:value="keyword"
+        :placeholder="t('solutionSearch.placeholder')"
+        @keyup.enter="handleSearch"
+      />
+      <n-button type="success" :loading="searching" @click="handleSearch">
+        {{ t('solutionSearch.button') }}
+      </n-button>
+    </div>
 
-  <p v-if="total > 0" class="result-count">
-    {{ t('solutionSearch.resultCount', { count: total }) }}
-  </p>
+    <p v-if="total > 0" class="result-count">
+      {{ t('solutionSearch.resultCount', { count: total }) }}
+    </p>
 
-  <el-empty
-    v-if="!searching && hasSearched && results.length === 0"
-    :description="t('solutionSearch.empty')"
-  />
+    <div class="solution-search__results">
+      <n-empty
+        v-if="!searching && hasSearched && results.length === 0"
+        :description="t('solutionSearch.empty')"
+      />
 
-  <div v-if="results.length > 0" class="solution-search__list">
-    <article
-      v-for="item in results"
-      :key="item.ticket_no"
-      class="solution-search__card"
-      :class="[statusToneClass(item.status), { 'is-expanded': isExpanded(item.ticket_no) }]"
-    >
+      <div v-if="results.length > 0" class="solution-search__list">
+        <article
+          v-for="item in results"
+          :key="item.ticket_no"
+          class="solution-search__card"
+          :class="[statusToneClass(item.status), { 'is-expanded': isExpanded(item.ticket_no) }]"
+        >
       <button
         type="button"
         class="solution-search__card-header"
@@ -161,11 +164,27 @@ function toggleExpanded(ticketNo: string): void {
             </section>
           </section>
         </div>
-    </article>
+        </article>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.solution-search {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.solution-search__results {
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  padding-right: 4px;
+}
+
 .solution-search__list {
   margin-top: 12px;
   display: grid;

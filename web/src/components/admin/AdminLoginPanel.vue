@@ -31,21 +31,21 @@ async function handleLogin(): Promise<void> {
     </div>
 
     <div class="admin-login-panel__form">
-      <el-input
-        v-model="username"
+      <n-input
+        v-model:value="username"
         :placeholder="t('admin.usernamePlaceholder')"
         @keyup.enter="handleLogin"
       />
-      <el-input
-        v-model="password"
+      <n-input
+        v-model:value="password"
         type="password"
-        show-password
+        show-password-on="click"
         :placeholder="t('admin.loginPlaceholder')"
         @keyup.enter="handleLogin"
       />
-      <el-button type="primary" :loading="props.loading" @click="handleLogin">
+      <n-button type="primary" :loading="props.loading" @click="handleLogin">
         {{ t('common.login') }}
-      </el-button>
+      </n-button>
     </div>
   </section>
 </template>

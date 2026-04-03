@@ -28,27 +28,48 @@ function goAdmin(): void {
 </script>
 
 <template>
-  <header class="hero-banner hero-banner--compact">
-    <div class="hero-banner__glow hero-banner__glow--left"></div>
-    <div class="hero-banner__glow hero-banner__glow--right"></div>
+  <header class="app-bar" :class="{ 'app-bar--setup': !installed && !isAdminRoute }">
+    <div class="app-bar__brand">
+      <div class="app-bar__identity">
+        <span class="app-bar__badge">{{ t('hero.eyebrow') }}</span>
+        <h1>{{ t('hero.title') }}</h1>
+      </div>
+      <p v-if="!isAdminRoute && !installed" class="app-bar__subtitle">{{ t('hero.setupSubtitle') }}</p>
+    </div>
 
-    <div class="hero-banner__inner">
-      <div class="hero-banner__topbar">
-        <div>
-          <p class="hero-banner__eyebrow">
-            {{ t('hero.eyebrow') }}
-            <span class="copyrigt">(repo for <a href="https://github.com/orziz/game-feedback" target="_blank">GitHub</a>)</span>
-          </p>
-          <div class="hero-banner__version-pill" :title="t('hero.versionTitle')">
-            <span class="hero-banner__version-label">{{ t('hero.versionLabel') }}</span>
-            <strong class="hero-banner__version-value">{{ props.systemVersion }}</strong>
-          </div>
+    <div class="app-bar__controls">
+      <div class="app-bar__meta">
+        <div class="app-bar__version-pill" :title="t('hero.versionTitle')">
+          <span class="app-bar__version-label">{{ t('hero.versionLabel') }}</span>
+          <strong class="app-bar__version-value">{{ props.systemVersion }}</strong>
         </div>
+        <a class="app-bar__repo-link" href="https://github.com/orziz/game-feedback" target="_blank">GitHub</a>
+      </div>
 
-        <div class="hero-banner__locale" :aria-label="t('common.language')">
+      <div class="app-bar__switches">
+        <div class="app-bar__route-switch">
           <button
             type="button"
-            class="hero-banner__locale-button"
+            class="app-bar__switch-button"
+            :class="{ 'is-active': route.path === '/' }"
+            @click="goPlayer"
+          >
+            {{ t('common.playerPortal') }}
+          </button>
+          <button
+            type="button"
+            class="app-bar__switch-button"
+            :class="{ 'is-active': route.path === '/admin' }"
+            @click="goAdmin"
+          >
+            {{ t('common.adminPortal') }}
+          </button>
+        </div>
+
+        <div class="app-bar__locale" :aria-label="t('common.language')">
+          <button
+            type="button"
+            class="app-bar__switch-button app-bar__switch-button--locale"
             :class="{ 'is-active': locale === 'zh-CN' }"
             @click="emit('update:locale', 'zh-CN')"
           >
@@ -56,7 +77,7 @@ function goAdmin(): void {
           </button>
           <button
             type="button"
-            class="hero-banner__locale-button"
+            class="app-bar__switch-button app-bar__switch-button--locale"
             :class="{ 'is-active': locale === 'en' }"
             @click="emit('update:locale', 'en')"
           >
@@ -64,349 +85,205 @@ function goAdmin(): void {
           </button>
         </div>
       </div>
-
-      <div class="hero-banner__body hero-banner__body--compact">
-        <div class="hero-banner__copy">
-          <h1>{{ t('hero.title') }}</h1>
-          <p v-if="!isAdminRoute && !installed" class="hero-banner__subtitle hero-banner__subtitle--compact">
-            {{ t('hero.setupSubtitle') }}
-          </p>
-        </div>
-
-        <div class="hero-banner__actions">
-          <div class="hero-banner__route-switch">
-            <button
-              type="button"
-              class="hero-banner__route-button"
-              :class="{ 'is-active': route.path === '/' }"
-              @click="goPlayer"
-            >
-              {{ t('common.playerPortal') }}
-            </button>
-            <button
-              type="button"
-              class="hero-banner__route-button"
-              :class="{ 'is-active': route.path === '/admin' }"
-              @click="goAdmin"
-            >
-              {{ t('common.adminPortal') }}
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   </header>
 </template>
 
 <style scoped>
-.hero-banner {
+.app-bar {
   position: relative;
-  overflow: hidden;
-  border-radius: 32px;
-  padding: 0;
-  color: #f7fbff;
-  background:
-    radial-gradient(circle at 0% 0%, rgba(255, 214, 118, 0.22), transparent 36%),
-    radial-gradient(circle at 100% 15%, rgba(114, 234, 215, 0.22), transparent 32%),
-    linear-gradient(135deg, #102735 0%, #14485b 52%, #126d69 100%);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 28px 90px rgba(8, 32, 48, 0.22);
-}
-
-.hero-banner__inner {
-  position: relative;
-  z-index: 1;
   display: grid;
-  gap: 22px;
-  padding: 20px 22px 22px;
-}
-
-.hero-banner__glow {
-  position: absolute;
-  border-radius: 999px;
-  filter: blur(12px);
-  opacity: 0.42;
-}
-
-.hero-banner__glow--left {
-  width: 220px;
-  height: 220px;
-  left: -40px;
-  bottom: -96px;
-  background: rgba(255, 193, 91, 0.34);
-}
-
-.hero-banner__glow--right {
-  width: 240px;
-  height: 240px;
-  right: -60px;
-  top: -96px;
-  background: rgba(147, 240, 230, 0.26);
-}
-
-.hero-banner__topbar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.hero-banner__eyebrow,
-.hero-banner__copy p {
-  margin: 0;
-}
-
-.hero-banner__eyebrow {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: rgba(247, 251, 255, 0.8);
-}
-
-.hero-banner__version-pill {
-  margin-top: 10px;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 7px 12px;
-  border-radius: 999px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 18px;
+  color: #edf7f8;
   background:
-    linear-gradient(120deg, rgba(255, 246, 223, 0.96) 0%, rgba(224, 254, 246, 0.95) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.56);
-  box-shadow: 0 8px 24px rgba(13, 71, 84, 0.28);
+    radial-gradient(circle at 0% 0%, rgba(255, 214, 118, 0.16), transparent 28%),
+    radial-gradient(circle at 100% 0%, rgba(114, 234, 215, 0.14), transparent 24%),
+    linear-gradient(135deg, #113040 0%, #16495d 50%, #176861 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 14px 36px rgba(8, 32, 48, 0.16);
 }
 
-.hero-banner__version-label {
-  font-size: 11px;
+.app-bar--setup {
+  padding-block: 12px;
+}
+
+.app-bar__brand {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.app-bar__identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.app-bar__badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(245, 252, 253, 0.84);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.app-bar__identity h1 {
+  margin: 0;
+  min-width: 0;
+  font-size: clamp(18px, 2vw, 22px);
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.app-bar__subtitle {
+  margin: 0;
+  color: rgba(241, 250, 251, 0.74);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.app-bar__controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-bar__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-bar__version-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #0e3b45;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.app-bar__version-label {
+  font-size: 10px;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #1d5a60;
+  color: #49717a;
 }
 
-.hero-banner__version-value {
+.app-bar__version-value {
+  font-size: 12px;
   font-family: 'JetBrains Mono', 'Consolas', monospace;
-  font-size: 14px;
-  color: #0d3f4a;
 }
 
-.hero-banner__locale {
+.app-bar__repo-link {
+  color: rgba(241, 250, 251, 0.82);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.app-bar__repo-link:hover {
+  text-decoration: underline;
+}
+
+.app-bar__switches {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-bar__route-switch,
+.app-bar__locale {
   display: inline-flex;
-  gap: 6px;
+  gap: 4px;
   padding: 4px;
   border-radius: 999px;
-  background: rgba(247, 251, 255, 0.1);
-  border: 1px solid rgba(247, 251, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-.hero-banner__locale-button {
+.app-bar__switch-button {
   border: 0;
+  padding: 7px 11px;
+  min-height: 32px;
   border-radius: 999px;
-  padding: 8px 14px;
   background: transparent;
-  color: rgba(247, 251, 255, 0.72);
+  color: rgba(241, 250, 251, 0.76);
   font: inherit;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.22s ease, color 0.22s ease, transform 0.22s ease;
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.hero-banner__locale-button:hover,
-.hero-banner__locale-button.is-active {
-  background: rgba(247, 251, 255, 0.94);
-  color: #0c3b49;
-  transform: translateY(-1px);
+.app-bar__switch-button.is-active {
+  background: rgba(255, 255, 255, 0.96);
+  color: #103b46;
+  box-shadow: 0 4px 14px rgba(7, 33, 40, 0.14);
 }
 
-.hero-banner__body {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
-  gap: 18px;
-  align-items: end;
+.app-bar__switch-button--locale {
+  min-width: 52px;
 }
 
-.hero-banner__copy h1 {
-  margin: 0 0 8px;
-  font-family: 'LXGW WenKai', 'Kaiti SC', serif;
-  font-size: clamp(30px, 4vw, 46px);
-  line-height: 1.04;
-}
-
-.hero-banner__copy p {
-  max-width: 760px;
-  line-height: 1.62;
-  color: rgba(247, 251, 255, 0.88);
-}
-
-.hero-banner__actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.hero-banner__route-switch {
-  display: grid;
-  gap: 10px;
-  width: min(320px, 100%);
-  padding: 10px;
-  border-radius: 24px;
-  background: rgba(247, 251, 255, 0.1);
-  border: 1px solid rgba(247, 251, 255, 0.16);
-  backdrop-filter: blur(10px);
-}
-
-.hero-banner__route-button {
-  border: 0;
-  border-radius: 18px;
-  padding: 13px 16px;
-  background: transparent;
-  color: rgba(247, 251, 255, 0.84);
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-  transition: background-color 0.22s ease, color 0.22s ease, transform 0.22s ease;
-}
-
-.hero-banner__route-button.is-active {
-  background: rgba(247, 251, 255, 0.95);
-  color: #0c3b49;
-  transform: translateY(-1px);
-}
-
-.hero-banner--compact {
-  border-radius: 24px;
-}
-
-.hero-banner--compact .hero-banner__inner {
-  gap: 12px;
-  padding: 14px 18px 16px;
-}
-
-.hero-banner--compact .hero-banner__topbar {
-  align-items: center;
-}
-
-.hero-banner--compact .hero-banner__eyebrow {
-  font-size: 11px;
-  letter-spacing: 0.16em;
-}
-
-.hero-banner--compact .hero-banner__version-pill {
-  margin-top: 6px;
-  padding: 5px 10px;
-}
-
-.hero-banner--compact .hero-banner__version-label {
-  font-size: 10px;
-}
-
-.hero-banner--compact .hero-banner__version-value {
-  font-size: 13px;
-}
-
-.hero-banner__body--compact {
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: center;
-}
-
-.hero-banner--compact .hero-banner__copy h1 {
-  margin: 0;
-  font-size: clamp(24px, 3vw, 32px);
-}
-
-.hero-banner__subtitle--compact {
-  margin-top: 6px;
-  max-width: 680px;
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.hero-banner--compact .hero-banner__route-switch {
-  grid-auto-flow: column;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  width: auto;
-  min-width: 280px;
-  padding: 6px;
-  gap: 6px;
-  border-radius: 18px;
-}
-
-.hero-banner--compact .hero-banner__route-button {
-  border-radius: 14px;
-  padding: 10px 14px;
-  text-align: center;
-}
-
-.hero-banner--compact .hero-banner__locale {
-  padding: 3px;
-}
-
-.hero-banner--compact .hero-banner__locale-button {
-  padding: 7px 12px;
-}
-
-@media (max-width: 900px) {
-  .hero-banner {
-    border-radius: 28px;
-  }
-
-  .hero-banner__inner {
-    padding: 18px;
-  }
-
-  .hero-banner__body {
+@media (max-width: 980px) {
+  .app-bar {
     grid-template-columns: 1fr;
     align-items: start;
   }
 
-  .hero-banner__actions {
-    justify-content: flex-start;
-  }
-
-  .hero-banner--compact .hero-banner__route-switch {
-    min-width: 0;
+  .app-bar__controls {
     width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
   }
 }
 
 @media (max-width: 640px) {
-  .hero-banner__topbar {
+  .app-bar {
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .app-bar__identity {
+    align-items: flex-start;
     flex-direction: column;
+    gap: 6px;
   }
 
-  .hero-banner__locale {
+  .app-bar__controls,
+  .app-bar__switches {
     width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .app-bar__meta {
     justify-content: space-between;
+    width: 100%;
   }
 
-  .hero-banner__version-pill {
-    margin-top: 8px;
+  .app-bar__route-switch,
+  .app-bar__locale {
+    width: 100%;
   }
 
-  .hero-banner__locale-button {
+  .app-bar__switch-button {
     flex: 1;
   }
-
-  .hero-banner__route-switch {
-    width: 100%;
-  }
-
-  .hero-banner__body--compact {
-    grid-template-columns: 1fr;
-    align-items: start;
-  }
-
-  .hero-banner--compact .hero-banner__route-switch {
-    grid-auto-flow: row;
-  }
-}
-
-.copyrigt {
-  margin-left: 12px;
-  font-size: 10px;
-  color: rgba(247, 251, 255, 0.6);
-}
-.copyrigt a {
-  color: rgba(247, 251, 255, 0.8);
-  text-decoration: underline;
 }
 </style>

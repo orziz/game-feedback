@@ -94,30 +94,30 @@ export function translateSeverity(t: Translator, value: Severity): string {
 }
 
 /**
- * 根据工单状态返回 Element Plus Tag 组件的 type
+ * 根据工单状态返回标签组件的 type
  *
  * @param status - 工单状态枚举值
  * @returns Tag 颜色类型
  */
-export function getStatusTagType(status: TicketStatus): 'success' | 'warning' | 'info' | 'danger' {
+export function getStatusTagType(status: TicketStatus): 'success' | 'warning' | 'info' | 'error' {
   switch (status) {
     case 2:  return 'success'
     case 1:  return 'warning'
     case 0:  return 'info'
-    case 3:  return 'danger'
+    case 3:  return 'error'
     default: return 'info'
   }
 }
 
 /**
- * 根据反馈类型返回 Element Plus Tag 组件的 type
+ * 根据反馈类型返回标签组件的 type
  *
  * @param type - 反馈类型枚举值
  * @returns Tag 颜色类型
  */
-export function getFeedbackTypeTagType(type: FeedbackType): 'danger' | 'warning' | 'success' | 'info' {
+export function getFeedbackTypeTagType(type: FeedbackType): 'error' | 'warning' | 'success' | 'info' {
   switch (type) {
-    case 0:  return 'danger'
+    case 0:  return 'error'
     case 1:  return 'warning'
     case 2:  return 'success'
     default: return 'info'

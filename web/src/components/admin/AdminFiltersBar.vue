@@ -65,74 +65,50 @@ const keywordModel = computed({
     </div>
 
     <div class="admin-filters-shell__actions">
-      <el-button :loading="loading" type="primary" plain @click="emit('refresh')">
+      <n-button :loading="loading" type="primary" secondary @click="emit('refresh')">
         {{ t('common.refresh') }}
-      </el-button>
+      </n-button>
     </div>
 
     <div class="admin-filters">
-      <el-select
-        v-model="statusModel"
+      <n-select
+        v-model:value="statusModel"
         :placeholder="t('admin.statusFilterPlaceholder')"
+        :options="statusOptions"
         class="admin-filters__compact-field"
         clearable
-        @change="emit('refresh')"
-      >
-        <el-option
-          v-for="s in statusOptions"
-          :key="s.value"
-          :label="s.label"
-          :value="s.value"
-        />
-      </el-select>
+        @update:value="emit('refresh')"
+      />
 
-      <el-select
-        v-model="typeModel"
+      <n-select
+        v-model:value="typeModel"
         :placeholder="t('admin.typeFilterPlaceholder')"
+        :options="typeOptions"
         class="admin-filters__compact-field"
         clearable
-        @change="emit('refresh')"
-      >
-        <el-option
-          v-for="ft in typeOptions"
-          :key="ft.value"
-          :label="ft.label"
-          :value="ft.value"
-        />
-      </el-select>
+        @update:value="emit('refresh')"
+      />
 
-      <el-select
-        v-model="severityModel"
+      <n-select
+        v-model:value="severityModel"
         :placeholder="t('admin.severityFilterPlaceholder')"
+        :options="severityOptions"
         class="admin-filters__compact-field"
         clearable
-        @change="emit('refresh')"
-      >
-        <el-option
-          v-for="sv in severityOptions"
-          :key="sv.value"
-          :label="sv.label"
-          :value="sv.value"
-        />
-      </el-select>
+        @update:value="emit('refresh')"
+      />
 
-      <el-select
-        v-model="assignedModel"
+      <n-select
+        v-model:value="assignedModel"
         :placeholder="t('admin.assignedFilterPlaceholder')"
+        :options="assignees.map((user) => ({ label: user.username, value: user.id }))"
         class="admin-filters__compact-field"
         clearable
-        @change="emit('refresh')"
-      >
-        <el-option
-          v-for="u in assignees"
-          :key="u.id"
-          :label="u.username"
-          :value="u.id"
-        />
-      </el-select>
+        @update:value="emit('refresh')"
+      />
 
-      <el-input
-        v-model="keywordModel"
+      <n-input
+        v-model:value="keywordModel"
         :placeholder="t('admin.keywordPlaceholder')"
         clearable
         @keyup.enter="emit('refresh')"

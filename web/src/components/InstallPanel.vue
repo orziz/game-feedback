@@ -29,62 +29,69 @@ const form = ref<InstallForm>({
     <h2>{{ t('install.title') }}</h2>
     <p class="panel-tip">{{ t('install.tip') }}</p>
 
-    <el-form label-width="144px" class="install-form">
-      <el-form-item :label="t('install.dbHost')">
-        <el-input v-model="form.host" placeholder="127.0.0.1" />
-      </el-form-item>
-      <el-form-item :label="t('install.dbPort')">
-        <el-input-number v-model="form.port" :min="1" :max="65535" />
-      </el-form-item>
-      <el-form-item :label="t('install.dbName')">
-        <el-input v-model="form.database" placeholder="game_feedback" />
-      </el-form-item>
-      <el-form-item :label="t('install.dbUser')">
-        <el-input v-model="form.username" placeholder="root" />
-      </el-form-item>
-      <el-form-item :label="t('install.dbPassword')">
-        <el-input v-model="form.password" type="password" show-password />
-      </el-form-item>
-      <el-form-item :label="t('install.adminUsername')">
-        <el-input
-          v-model="form.adminUsername"
+    <n-form label-placement="left" label-width="144" class="install-form">
+      <n-form-item :label="t('install.dbHost')">
+        <n-input v-model:value="form.host" placeholder="127.0.0.1" />
+      </n-form-item>
+      <n-form-item :label="t('install.dbPort')">
+        <n-input-number v-model:value="form.port" :min="1" :max="65535" />
+      </n-form-item>
+      <n-form-item :label="t('install.dbName')">
+        <n-input v-model:value="form.database" placeholder="game_feedback" />
+      </n-form-item>
+      <n-form-item :label="t('install.dbUser')">
+        <n-input v-model:value="form.username" placeholder="root" />
+      </n-form-item>
+      <n-form-item :label="t('install.dbPassword')">
+        <n-input v-model:value="form.password" type="password" show-password-on="click" />
+      </n-form-item>
+      <n-form-item :label="t('install.adminUsername')">
+        <n-input
+          v-model:value="form.adminUsername"
           :placeholder="t('install.adminUsernamePlaceholder')"
         />
-      </el-form-item>
-      <el-form-item :label="t('install.adminPassword')">
-        <el-input
-          v-model="form.adminPassword"
+      </n-form-item>
+      <n-form-item :label="t('install.adminPassword')">
+        <n-input
+          v-model:value="form.adminPassword"
           type="password"
-          show-password
+          show-password-on="click"
           :placeholder="t('install.adminPasswordPlaceholder')"
         />
-      </el-form-item>
+      </n-form-item>
 
-      <el-form-item :label="t('install.uploadMode')">
-        <el-radio-group v-model="form.uploadMode">
-          <el-radio-button value="off">{{ t('install.uploadModeOff') }}</el-radio-button>
-          <el-radio-button value="local">{{ t('install.uploadModeLocal') }}</el-radio-button>
-          <el-radio-button value="qiniu">{{ t('install.uploadModeQiniu') }}</el-radio-button>
-        </el-radio-group>
-      </el-form-item>
+      <n-form-item :label="t('install.uploadMode')">
+        <n-radio-group v-model:value="form.uploadMode">
+          <n-radio-button value="off">{{ t('install.uploadModeOff') }}</n-radio-button>
+          <n-radio-button value="local">{{ t('install.uploadModeLocal') }}</n-radio-button>
+          <n-radio-button value="qiniu">{{ t('install.uploadModeQiniu') }}</n-radio-button>
+        </n-radio-group>
+      </n-form-item>
 
       <template v-if="form.uploadMode === 'qiniu'">
-        <el-form-item :label="t('install.qiniuAccessKey')">
-          <el-input v-model="form.qiniuAccessKey" :placeholder="t('install.qiniuAccessKeyPlaceholder')" />
-        </el-form-item>
-        <el-form-item :label="t('install.qiniuSecretKey')">
-          <el-input v-model="form.qiniuSecretKey" type="password" show-password :placeholder="t('install.qiniuSecretKeyPlaceholder')" />
-        </el-form-item>
-        <el-form-item :label="t('install.qiniuBucket')">
-          <el-input v-model="form.qiniuBucket" :placeholder="t('install.qiniuBucketPlaceholder')" />
-        </el-form-item>
-        <el-form-item :label="t('install.qiniuDomain')">
-          <el-input v-model="form.qiniuDomain" :placeholder="t('install.qiniuDomainPlaceholder')" />
-        </el-form-item>
+        <n-form-item :label="t('install.qiniuAccessKey')">
+          <n-input v-model:value="form.qiniuAccessKey" :placeholder="t('install.qiniuAccessKeyPlaceholder')" />
+        </n-form-item>
+        <n-form-item :label="t('install.qiniuSecretKey')">
+          <n-input v-model:value="form.qiniuSecretKey" type="password" show-password-on="click" :placeholder="t('install.qiniuSecretKeyPlaceholder')" />
+        </n-form-item>
+        <n-form-item :label="t('install.qiniuBucket')">
+          <n-input v-model:value="form.qiniuBucket" :placeholder="t('install.qiniuBucketPlaceholder')" />
+        </n-form-item>
+        <n-form-item :label="t('install.qiniuDomain')">
+          <n-input v-model:value="form.qiniuDomain" :placeholder="t('install.qiniuDomainPlaceholder')" />
+        </n-form-item>
       </template>
-      <el-button type="primary" :loading="installLoading" @click="appStore.installSystem(form)">
+
+      <n-button type="primary" :loading="installLoading" @click="appStore.installSystem(form)">
         {{ t('common.install') }}
-      </el-button>
-    </el-form>
+      </n-button>
+    </n-form>
   </section>
 </template>
+
+<style scoped>
+.install-form :deep(.n-input-number) {
+  width: 100%;
+}
+</style>

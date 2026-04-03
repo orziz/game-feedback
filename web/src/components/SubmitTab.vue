@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, h, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { useMessage, useDialog } from 'naive-ui'
 import { api } from '@/api/client'
 import { getErrorMessage, getApiError } from '@/utils/errors'
 import { useAppStore } from '@/stores/app'
 
 const { t } = useI18n()
+const message = useMessage()
+const dialog = useDialog()
 const submitting = ref(false)
 const appStore = useAppStore()
 const { typeOptions, severityOptions, uploadMode, uploadMaxBytes } = storeToRefs(appStore)
@@ -15,6 +17,7 @@ const defaultType: FeedbackType = 0
 const defaultSeverity: Severity = 1
 const canUploadAttachment = computed(() => uploadMode.value !== 'off')
 const attachmentInputRef = ref<HTMLInputElement | null>(null)
+const attachmentDragging = ref(false)
 const bugType: FeedbackType = 0
 
 const maxAttachmentSize = computed(() => (uploadMaxBytes.value > 0 ? uploadMaxBytes.value : 5 * 1024 * 1024))
@@ -40,18 +43,14 @@ const form = ref<SubmitForm>({
   attachmentFile: null,
 })
 
-function handleAttachmentChange(event: Event): void {
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0] ?? null
-
+function applyAttachmentFile(file: File | null): void {
   if (!file) {
     form.value.attachmentFile = null
     return
   }
 
   if (!canUploadAttachment.value) {
-    ElMessage.warning(t('messages.uploadDisabled'))
-    target.value = ''
+    message.warning(t('messages.uploadDisabled'))
     form.value.attachmentFile = null
     return
   }
@@ -63,20 +62,49 @@ function handleAttachmentChange(event: Event): void {
     || fileName.endsWith('.jpg')
     || fileName.endsWith('.jpeg')
   if (!validExtension) {
-    ElMessage.warning(t('messages.uploadTypeInvalid'))
-    target.value = ''
+    message.warning(t('messages.uploadTypeInvalid'))
     form.value.attachmentFile = null
     return
   }
 
   if (file.size > maxAttachmentSize.value) {
-    ElMessage.warning(t('messages.uploadSizeInvalid', { size: maxAttachmentSizeMb.value }))
-    target.value = ''
+    message.warning(t('messages.uploadSizeInvalid', { size: maxAttachmentSizeMb.value }))
     form.value.attachmentFile = null
     return
   }
 
   form.value.attachmentFile = file
+}
+
+function handleAttachmentChange(event: Event): void {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0] ?? null
+  applyAttachmentFile(file)
+  if (!form.value.attachmentFile) {
+    target.value = ''
+  }
+}
+
+function handleAttachmentDragOver(event: DragEvent): void {
+  event.preventDefault()
+  if (!canUploadAttachment.value || submitting.value) return
+  attachmentDragging.value = true
+}
+
+function handleAttachmentDragLeave(event: DragEvent): void {
+  event.preventDefault()
+  const currentTarget = event.currentTarget as HTMLElement | null
+  const relatedTarget = event.relatedTarget as Node | null
+  if (currentTarget && relatedTarget && currentTarget.contains(relatedTarget)) return
+  attachmentDragging.value = false
+}
+
+function handleAttachmentDrop(event: DragEvent): void {
+  event.preventDefault()
+  attachmentDragging.value = false
+  if (!canUploadAttachment.value || submitting.value) return
+  const file = event.dataTransfer?.files?.[0] ?? null
+  applyAttachmentFile(file)
 }
 
 function clearAttachment(): void {
@@ -96,15 +124,15 @@ async function handleSubmit(): Promise<void> {
   }
 
   if (!form.value.title.trim() || !form.value.description.trim()) {
-    ElMessage.warning(t('messages.submitRequired'))
+    message.warning(t('messages.submitRequired'))
     return
   }
   if (form.value.title.length > 120 || form.value.contact.length > 120) {
-    ElMessage.warning(t('messages.submitLength'))
+    message.warning(t('messages.submitLength'))
     return
   }
   if (form.value.description.length > 3000) {
-    ElMessage.warning(t('messages.submitContentLength'))
+    message.warning(t('messages.submitContentLength'))
     return
   }
 
@@ -143,11 +171,17 @@ async function handleSubmit(): Promise<void> {
       })
     }
 
-    await ElMessageBox.alert(
-      t('messages.submitSuccessBody', { ticketNo: data.ticketNo }),
-      t('messages.submitSuccessTitle'),
-      { dangerouslyUseHTMLString: true },
-    )
+    await new Promise<void>((resolve) => {
+      dialog.success({
+        title: t('messages.submitSuccessTitle'),
+        content: () => h('div', { innerHTML: t('messages.submitSuccessBody', { ticketNo: data.ticketNo }), class: 'ui-dialog-html' }),
+        positiveText: t('common.confirm'),
+        autoFocus: false,
+        maskClosable: false,
+        onPositiveClick: () => resolve(),
+        onClose: () => resolve(),
+      })
+    })
     form.value = {
       type: defaultType,
       severity: defaultSeverity,
@@ -163,9 +197,9 @@ async function handleSubmit(): Promise<void> {
     const apiError = getApiError(error)
     if (apiError?.code === 'DUPLICATE_TICKET') {
       const ticketNo = (apiError.payload as Record<string, unknown>)?.ticketNo ?? ''
-      ElMessage.warning(t('messages.duplicateTicket', { ticketNo }))
+      message.warning(t('messages.duplicateTicket', { ticketNo }))
     } else {
-      ElMessage.error(getErrorMessage(error, t('messages.submitFailed')))
+      message.error(getErrorMessage(error, t('messages.submitFailed')))
     }
   } finally {
     submitting.value = false
@@ -174,35 +208,45 @@ async function handleSubmit(): Promise<void> {
 </script>
 
 <template>
-  <el-form label-position="top" class="submit-form">
+  <n-form label-placement="top" class="submit-form">
     <section class="submit-form__compact-fields">
       <div class="submit-form__row">
         <div class="submit-form__row-label is-required">{{ t('submitForm.type') }}</div>
         <div class="submit-form__row-control">
-          <el-radio-group v-model="form.type" class="submit-form__radio-group">
-            <el-radio-button v-for="ft in typeOptions" :key="ft.value" :value="ft.value">
+          <div class="submit-type-picker" role="radiogroup" :aria-label="t('submitForm.type')">
+            <button
+              v-for="ft in typeOptions"
+              :key="ft.value"
+              type="button"
+              class="submit-type-picker__item"
+              :class="{ 'is-active': form.type === ft.value }"
+              @click="form.type = ft.value"
+            >
               {{ ft.label }}
-            </el-radio-button>
-          </el-radio-group>
+            </button>
+          </div>
         </div>
       </div>
 
       <div class="submit-form__row">
         <div class="submit-form__row-label is-required">{{ t('submitForm.severity') }}</div>
         <div class="submit-form__row-control">
-          <el-select v-model="form.severity" :placeholder="t('submitForm.severity')" class="submit-form__control">
-            <el-option v-for="s in severityOptions" :key="s.value" :label="s.label" :value="s.value" />
-          </el-select>
+          <n-select
+            v-model:value="form.severity"
+            :placeholder="t('submitForm.severity')"
+            :options="severityOptions"
+            class="submit-form__control"
+          />
         </div>
       </div>
 
       <div class="submit-form__row">
         <div class="submit-form__row-label is-required">{{ t('submitForm.title') }}</div>
         <div class="submit-form__row-control">
-          <el-input
-            v-model="form.title"
+          <n-input
+            v-model:value="form.title"
             maxlength="120"
-            show-word-limit
+            show-count
             :placeholder="t('submitForm.titlePlaceholder')"
             class="submit-form__control"
           />
@@ -214,12 +258,12 @@ async function handleSubmit(): Promise<void> {
     <div class="submit-form__row submit-form__row--top">
       <div class="submit-form__row-label is-required">{{ detailLabel }}</div>
       <div class="submit-form__row-control">
-        <el-input
-          v-model="form.description"
+        <n-input
+          v-model:value="form.description"
           type="textarea"
-          :rows="detailRows"
+          :autosize="{ minRows: detailRows, maxRows: detailRows }"
           maxlength="3000"
-          show-word-limit
+          show-count
           :placeholder="detailPlaceholder"
           class="submit-form__control"
         />
@@ -229,9 +273,10 @@ async function handleSubmit(): Promise<void> {
     <div class="submit-form__row">
       <div class="submit-form__row-label">{{ t('submitForm.contact') }}</div>
       <div class="submit-form__row-control">
-        <el-input
-          v-model="form.contact"
+        <n-input
+          v-model:value="form.contact"
           maxlength="120"
+          show-count
           :placeholder="t('submitForm.contactPlaceholder')"
           class="submit-form__control"
         />
@@ -239,7 +284,14 @@ async function handleSubmit(): Promise<void> {
     </div>
 
     <div class="submit-form__attachment-block" v-if="canUploadAttachment">
-      <div class="submit-attachment">
+      <div
+        class="submit-attachment"
+        :class="{ 'is-dragging': attachmentDragging, 'has-file': !!form.attachmentFile }"
+        @dragover="handleAttachmentDragOver"
+        @dragenter.prevent="attachmentDragging = true"
+        @dragleave="handleAttachmentDragLeave"
+        @drop="handleAttachmentDrop"
+      >
         <input
           ref="attachmentInputRef"
           type="file"
@@ -248,32 +300,40 @@ async function handleSubmit(): Promise<void> {
           class="submit-attachment__native"
           @change="handleAttachmentChange"
         >
-        <div class="submit-attachment__row">
-          <el-button plain :disabled="!canUploadAttachment || submitting" @click="openAttachmentPicker">
-            {{ t('submitForm.attachment') }}
-          </el-button>
-          <div class="submit-attachment__name" :class="{ 'is-empty': !form.attachmentFile }">
-            {{ form.attachmentFile?.name || attachmentTipText }}
+        <div class="submit-attachment__row" @click="openAttachmentPicker">
+          <div class="submit-attachment__copy">
+            <strong class="submit-attachment__title">{{ t('submitForm.attachment') }}</strong>
+            <div class="submit-attachment__name" :class="{ 'is-empty': !form.attachmentFile }">
+              {{ form.attachmentFile?.name || attachmentTipText }}
+            </div>
+            <p class="submit-attachment__hint">{{ t('submitForm.attachmentDropHint') }}</p>
           </div>
-          <el-button v-if="form.attachmentFile" text @click="clearAttachment">
+          <n-button secondary :disabled="!canUploadAttachment || submitting" @click.stop="openAttachmentPicker">
+            {{ t('submitForm.attachmentChoose') }}
+          </n-button>
+          <n-button v-if="form.attachmentFile" text @click.stop="clearAttachment">
             {{ t('submitForm.clearAttachment') }}
-          </el-button>
+          </n-button>
         </div>
       </div>
     </div>
 
     <div class="submit-form__actions">
-      <el-button type="primary" :loading="submitting" :disabled="submitting" class="submit-form__submit" @click="handleSubmit">
+      <n-button type="primary" :loading="submitting" :disabled="submitting" class="submit-form__submit" @click="handleSubmit">
         {{ t('submitForm.submitButton') }}
-      </el-button>
+      </n-button>
     </div>
-  </el-form>
+  </n-form>
 </template>
 
 <style scoped>
 .submit-form {
   width: 100%;
   max-width: none;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
   padding-bottom: 88px;
 }
 
@@ -322,19 +382,35 @@ async function handleSubmit(): Promise<void> {
   min-width: 0;
 }
 
-.submit-form__radio-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.submit-type-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
 }
 
-.submit-form__radio-group :deep(.el-radio-button) {
-  margin-right: 0;
+.submit-type-picker__item {
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  border-radius: 14px;
+  padding: 11px 14px;
+  background: rgba(245, 249, 251, 0.88);
+  color: var(--ink-soft);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.submit-form__radio-group :deep(.el-radio-button__inner) {
-  border-radius: 12px;
-  padding-inline: 14px;
+.submit-type-picker__item:hover {
+  transform: translateY(-1px);
+  border-color: rgba(15, 118, 110, 0.36);
+  color: var(--ink);
+}
+
+.submit-type-picker__item.is-active {
+  border-color: transparent;
+  background: linear-gradient(135deg, #102735 0%, #14485b 52%, #126d69 100%);
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgba(18, 109, 105, 0.22);
 }
 
 .submit-attachment {
@@ -342,6 +418,12 @@ async function handleSubmit(): Promise<void> {
   flex-direction: column;
   gap: 8px;
   width: 100%;
+  border-radius: 18px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.submit-attachment.is-dragging {
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.16);
 }
 
 .submit-attachment__native {
@@ -353,22 +435,37 @@ async function handleSubmit(): Promise<void> {
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(248, 251, 253, 0.95), rgba(255, 255, 255, 0.98));
+  padding: 16px;
+  border: 1px dashed rgba(15, 118, 110, 0.24);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(242, 250, 248, 0.96), rgba(255, 255, 255, 0.98));
+  cursor: pointer;
+}
+
+.submit-attachment__copy {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.submit-attachment__title {
+  color: var(--ink);
+  font-size: 14px;
 }
 
 .submit-attachment__name {
-  flex: 1;
   min-width: 0;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: rgba(15, 118, 110, 0.06);
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.submit-attachment__hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-soft);
 }
 
 .submit-attachment__name.is-empty {
@@ -405,6 +502,15 @@ async function handleSubmit(): Promise<void> {
 
   .submit-form__compact-fields {
     gap: 10px;
+  }
+
+  .submit-type-picker {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .submit-attachment__row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .submit-form__row {

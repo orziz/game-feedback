@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
-import { ElMessage } from 'element-plus'
+import { useMessage } from 'naive-ui'
 import { api } from '@/api/client'
 import { useAppStore } from '@/stores/app'
 import { useAdminStore } from '@/stores/admin'
@@ -11,13 +11,14 @@ import { triggerBlobDownload, triggerUrlDownload } from '@/utils/download'
 import { getErrorMessage } from '@/utils/errors'
 
 const props = defineProps<{
-  ticket:     TicketRecord | null
+  ticket: TicketRecord | null
   updateForm: AdminUpdateForm
-  updating:   boolean
+  updating: boolean
 }>()
 
 const emit = defineEmits<{ save: [] }>()
 const { t } = useI18n()
+const message = useMessage()
 const appStore = useAppStore()
 const adminStore = useAdminStore()
 const { severityOptions, statusOptions } = storeToRefs(appStore)
@@ -26,9 +27,10 @@ const bugType: FeedbackType = 0
 const imagePreviewUrl = ref<string | null>(null)
 const imagePreviewLoading = ref(false)
 const imagePreviewError = ref(false)
-// 七牛直连时缓存签名 URL，供下载复用，避免重复请求
 const attachmentDirectUrl = ref<string | null>(null)
 let imagePreviewIsBlobUrl = false
+
+const assignedOptions = computed(() => assignees.value.map((user) => ({ label: user.username, value: user.id })))
 
 const isImageAttachment = computed(() => {
   const mime = props.ticket?.attachment_mime?.toLowerCase() || ''
@@ -64,18 +66,15 @@ async function loadImagePreview(ticket: TicketRecord | null): Promise<void> {
 
   imagePreviewLoading.value = isImageAttachment.value
   try {
-    // 先查询附件访问模式（代理 or 七牛直连）
     const access = await api.admin.Ticket.get.attachmentUrl({ ticketNo: ticket.ticket_no })
 
     if (access.mode === 'direct' && access.url) {
-      // 直连模式：缓存签名 URL，图片直接用作 img src，无需额外请求
       attachmentDirectUrl.value = access.url
       if (isImageAttachment.value) {
         imagePreviewUrl.value = access.url
         imagePreviewIsBlobUrl = false
       }
     } else if (isImageAttachment.value) {
-      // 代理模式：图片需要通过后端代理下载再预览
       const blob = await api.admin.Ticket.getBlob.attachmentDownload({ ticketNo: ticket.ticket_no })
       if (blob.type.includes('application/json')) {
         const text = await blob.text()
@@ -90,7 +89,7 @@ async function loadImagePreview(ticket: TicketRecord | null): Promise<void> {
     }
   } catch (error) {
     imagePreviewError.value = true
-    ElMessage.error(getErrorMessage(error, t('messages.attachmentDownloadFailed')))
+    message.error(getErrorMessage(error, t('messages.attachmentDownloadFailed')))
   } finally {
     imagePreviewLoading.value = false
   }
@@ -99,11 +98,10 @@ async function loadImagePreview(ticket: TicketRecord | null): Promise<void> {
 function handleDownloadAttachment(ticket: TicketRecord): void {
   const attachmentName = ticket.attachment_name || ''
   if (!attachmentName) {
-    ElMessage.warning(t('messages.attachmentNotFound'))
+    message.warning(t('messages.attachmentNotFound'))
     return
   }
 
-  // 若已缓存直连 URL（由 loadImagePreview 预取），直接触发下载
   if (attachmentDirectUrl.value) {
     triggerUrlDownload(attachmentDirectUrl.value, attachmentName)
     return
@@ -117,7 +115,6 @@ function handleDownloadAttachment(ticket: TicketRecord): void {
         triggerUrlDownload(access.url, attachmentName)
         return
       }
-      // 代理模式：后端流式下载
       const blob = await api.admin.Ticket.getBlob.attachmentDownload({ ticketNo: ticket.ticket_no })
       if (blob.type.includes('application/json')) {
         const text = await blob.text()
@@ -127,7 +124,7 @@ function handleDownloadAttachment(ticket: TicketRecord): void {
       if (blob.size === 0) throw new Error(t('messages.attachmentDownloadFailed'))
       triggerBlobDownload(blob, attachmentName)
     } catch (error) {
-      ElMessage.error(getErrorMessage(error, t('messages.attachmentDownloadFailed')))
+      message.error(getErrorMessage(error, t('messages.attachmentDownloadFailed')))
     }
   })()
 }
@@ -161,14 +158,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <el-card v-if="ticket" class="admin-detail-card">
+  <n-card v-if="ticket" class="admin-detail-card" :bordered="false">
     <template #header>
       <div class="admin-detail-card__header">
         <div>
           <p class="admin-detail-card__eyebrow">{{ t('admin.detailEyebrow') }}</p>
           <h3>{{ t('admin.detailTitle', { ticketNo: ticket.ticket_no }) }}</h3>
         </div>
-          <TicketMetaTag kind="status" :value="ticket.status" effect="dark" round />
+        <TicketMetaTag kind="status" :value="ticket.status" effect="dark" round />
       </div>
     </template>
 
@@ -192,81 +189,51 @@ onBeforeUnmount(() => {
         <div v-if="ticket.attachment_name" class="admin-detail-row admin-detail-row--top">
           <div class="admin-detail-row__label">{{ t('common.attachment') }}</div>
           <div class="admin-detail-row__value admin-detail-card__attachment">
-            <el-image
-              v-if="isImageAttachment && imagePreviewUrl"
-              :src="imagePreviewUrl"
-              :preview-src-list="[imagePreviewUrl]"
-              fit="cover"
-              preview-teleported
-              class="admin-detail-card__image-preview"
-            />
+            <img v-if="isImageAttachment && imagePreviewUrl" :src="imagePreviewUrl" :alt="ticket.attachment_name" class="admin-detail-card__image-preview">
             <div v-else-if="isImageAttachment && imagePreviewLoading" class="admin-detail-card__attachment-state">
               {{ t('common.loading') }}
             </div>
             <div v-else-if="isImageAttachment && imagePreviewError" class="admin-detail-card__attachment-state">
-              <el-button type="primary" text @click="loadImagePreview(ticket)">
+              <n-button type="primary" text @click="loadImagePreview(ticket)">
                 {{ t('admin.retryImagePreview', { name: ticket.attachment_name }) }}
-              </el-button>
+              </n-button>
             </div>
-            <el-button type="primary" text @click="handleDownloadAttachment(ticket)">
+            <n-button type="primary" text @click="handleDownloadAttachment(ticket)">
               {{ t('admin.downloadAttachment', { name: ticket.attachment_name }) }}
-            </el-button>
+            </n-button>
           </div>
         </div>
       </section>
 
-      <el-form label-position="top" class="admin-detail-card__form">
-        <el-form-item :label="t('admin.detailStatus')">
-          <el-select v-model="updateForm.status">
-            <el-option
-              v-for="s in statusOptions"
-              :key="s.value"
-              :label="s.label"
-              :value="s.value"
-            />
-          </el-select>
-        </el-form-item>
+      <n-form label-placement="top" class="admin-detail-card__form">
+        <n-form-item :label="t('admin.detailStatus')">
+          <n-select v-model:value="updateForm.status" :options="statusOptions" />
+        </n-form-item>
 
-        <el-form-item :label="t('admin.detailAssignedTo')">
-          <el-select v-model="updateForm.assignedTo" clearable :placeholder="t('admin.assignPlaceholder')">
-            <el-option
-              v-for="u in assignees"
-              :key="u.id"
-              :label="u.username"
-              :value="u.id"
-            />
-          </el-select>
-        </el-form-item>
+        <n-form-item :label="t('admin.detailAssignedTo')">
+          <n-select v-model:value="updateForm.assignedTo" clearable :placeholder="t('admin.assignPlaceholder')" :options="assignedOptions" />
+        </n-form-item>
 
-        <el-form-item :label="t('admin.detailSeverity')">
-          <el-select v-model="updateForm.severity" :disabled="ticket.type !== bugType">
-            <el-option
-              v-for="sv in severityOptions"
-              :key="sv.value"
-              :label="sv.label"
-              :value="sv.value"
-            />
-          </el-select>
-          <span v-if="ticket.type !== bugType" class="admin-detail-card__tip">
-            {{ t('admin.severityFixed') }}
-          </span>
-        </el-form-item>
+        <n-form-item :label="t('admin.detailSeverity')">
+          <n-select v-model:value="updateForm.severity" :disabled="ticket.type !== bugType" :options="severityOptions" />
+          <span v-if="ticket.type !== bugType" class="admin-detail-card__tip">{{ t('admin.severityFixed') }}</span>
+        </n-form-item>
 
-        <el-form-item :label="t('admin.detailNote')">
-          <el-input
-            v-model="updateForm.adminNote"
+        <n-form-item :label="t('admin.detailNote')">
+          <n-input
+            v-model:value="updateForm.adminNote"
             type="textarea"
-            :rows="5"
+            :autosize="{ minRows: 5, maxRows: 5 }"
             :placeholder="t('admin.adminNotePlaceholder')"
           />
-        </el-form-item>
+        </n-form-item>
 
-        <el-button type="primary" :loading="updating" @click="emit('save')">
+        <n-button type="primary" :loading="updating" @click="emit('save')">
           {{ t('admin.saveButton') }}
-        </el-button>
-      </el-form>
+        </n-button>
+      </n-form>
 
-      <section v-if="ticket" class="admin-operations">
+      <section class="admin-operations">
         <div class="admin-operations__header">
           <h4>{{ t('admin.operationHistory') }}</h4>
         </div>
@@ -274,37 +241,37 @@ onBeforeUnmount(() => {
           <div v-if="ticketOperations.length === 0" class="admin-operations__empty">
             {{ t('admin.noOperations') }}
           </div>
-          <div v-for="op in ticketOperations" :key="op.id" class="admin-operations__item">
-            <div class="admin-operations__time">{{ op.created_at }}</div>
+          <div v-for="operation in ticketOperations" :key="operation.id" class="admin-operations__item">
+            <div class="admin-operations__time">{{ operation.created_at }}</div>
             <div class="admin-operations__content">
-              <span class="admin-operations__operator">{{ op.operator_username }}</span>
-              <span class="admin-operations__action">{{ getOperationTypeLabel(op.operation_type) }}</span>
-              <span v-if="op.old_value" class="admin-operations__old">
+              <span class="admin-operations__operator">{{ operation.operator_username }}</span>
+              <span class="admin-operations__action">{{ getOperationTypeLabel(operation.operation_type) }}</span>
+              <span v-if="operation.old_value" class="admin-operations__old">
                 {{ t('admin.from') }}
                 <TicketMetaTag
-                  v-if="op.operation_type === 'status_change'"
+                  v-if="operation.operation_type === 'status_change'"
                   kind="status"
-                  :value="parseStatusValue(op.old_value)"
+                  :value="parseStatusValue(operation.old_value)"
                   size="small"
                 />
-                <span v-else>{{ op.old_value }}</span>
+                <span v-else>{{ operation.old_value }}</span>
               </span>
               <span class="admin-operations__new">
                 {{ t('admin.to') }}
                 <TicketMetaTag
-                  v-if="op.operation_type === 'status_change'"
+                  v-if="operation.operation_type === 'status_change'"
                   kind="status"
-                  :value="parseStatusValue(op.new_value)"
+                  :value="parseStatusValue(operation.new_value)"
                   size="small"
                 />
-                <span v-else>{{ op.new_value }}</span>
+                <span v-else>{{ operation.new_value }}</span>
               </span>
             </div>
           </div>
         </div>
       </section>
     </div>
-  </el-card>
+  </n-card>
 </template>
 
 <style scoped>
@@ -380,23 +347,11 @@ onBeforeUnmount(() => {
   background: #ffffff;
 }
 
-.admin-detail-card__form :deep(.el-form-item__label) {
-  padding-bottom: 6px;
-  line-height: 1.2;
-}
-
 .admin-detail-card__attachment {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 10px;
-}
-
-.admin-detail-card__attachment-name {
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--ink-soft);
-  word-break: break-all;
 }
 
 .admin-detail-card__attachment-state {
@@ -411,11 +366,15 @@ onBeforeUnmount(() => {
   overflow: hidden;
   border: 1px solid rgba(15, 118, 110, 0.14);
   border-radius: 12px;
-  cursor: zoom-in;
   background: linear-gradient(180deg, rgba(248, 251, 253, 0.95), rgba(255, 255, 255, 0.98));
+  object-fit: cover;
 }
 
-.admin-detail-card__tip { margin-left: 10px; color: var(--ink-soft); }
+.admin-detail-card__tip {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--ink-soft);
+}
 
 .admin-detail-card__multiline {
   white-space: pre-wrap;
@@ -425,93 +384,69 @@ onBeforeUnmount(() => {
 .admin-operations {
   border: 1px solid rgba(15, 118, 110, 0.16);
   border-radius: 12px;
-  padding: 12px;
   background: #ffffff;
 }
 
 .admin-operations__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(15, 118, 110, 0.12);
+  padding: 12px 14px 0;
 }
 
 .admin-operations__header h4 {
   margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
 }
 
 .admin-operations__list {
-  max-height: 300px;
-  overflow-y: auto;
-  min-height: 60px;
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px 14px;
 }
 
 .admin-operations__empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 60px;
   color: var(--ink-soft);
-  font-size: 12px;
 }
 
 .admin-operations__item {
-  display: flex;
-  gap: 10px;
-  padding: 8px 0;
-  border-bottom: 1px dashed rgba(15, 118, 110, 0.12);
-  font-size: 12px;
-}
-
-.admin-operations__item:last-child {
-  border-bottom: none;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(240, 253, 250, 0.7);
 }
 
 .admin-operations__time {
-  flex: 0 0 160px;
+  font-size: 12px;
   color: var(--ink-soft);
 }
 
 .admin-operations__content {
-  flex: 1;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
 }
 
 .admin-operations__operator {
-  font-weight: 600;
+  font-weight: 700;
   color: var(--ink);
 }
 
-.admin-operations__action {
-  padding: 0 4px;
-  background: rgba(15, 118, 110, 0.08);
-  border-radius: 3px;
-  color: var(--brand-strong);
-  font-weight: 500;
-}
-
+.admin-operations__action,
 .admin-operations__old,
 .admin-operations__new {
   display: inline-flex;
+  gap: 6px;
   align-items: center;
-  gap: 4px;
-  color: var(--ink-soft);
 }
 
-.admin-operations__new {
-  font-weight: 500;
-  color: var(--ink);
-}
+@media (max-width: 768px) {
+  .admin-detail-row {
+    flex-direction: column;
+    gap: 6px;
+  }
 
-@media (max-width: 640px) {
-  .admin-detail-card__header { flex-direction: column; }
+  .admin-detail-row__label {
+    width: auto;
+    flex: none;
+  }
 }
 </style>

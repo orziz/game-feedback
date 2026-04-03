@@ -1,9 +1,9 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { ElMessage } from 'element-plus'
 import { i18n } from '@/i18n'
 import { api } from '@/api/client'
 import { getErrorMessage } from '@/utils/errors'
+import { message } from '@/ui/discrete'
 
 /**
  * 应用全局 Pinia Store
@@ -50,7 +50,7 @@ export const useAppStore = defineStore('app', () => {
       severityOptions.value = data.severities
       statusOptions.value = data.statuses
     } catch (error) {
-      ElMessage.error(getErrorMessage(error, t('messages.requestFailed')))
+      message.error(getErrorMessage(error, t('messages.requestFailed')))
     }
   }
 
@@ -68,7 +68,7 @@ export const useAppStore = defineStore('app', () => {
       uploadMode.value = 'off'
       uploadMaxBytes.value = defaultUploadMaxBytes
       systemVersion.value = '1.0.0'
-      ElMessage.error(getErrorMessage(error, t('messages.installStatusError')))
+      message.error(getErrorMessage(error, t('messages.installStatusError')))
     } finally {
       checkingInstall.value = false
     }
@@ -112,9 +112,9 @@ export const useAppStore = defineStore('app', () => {
       isInstalled.value = true
       uploadMode.value = payload.uploadMode
       activeTab.value = 'submit'
-      ElMessage.success(t('messages.installSuccess'))
+      message.success(t('messages.installSuccess'))
     } catch (error) {
-      ElMessage.error(getErrorMessage(error, t('messages.installFailed')))
+      message.error(getErrorMessage(error, t('messages.installFailed')))
       throw error
     } finally {
       installLoading.value = false

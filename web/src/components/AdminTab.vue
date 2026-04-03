@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
+import { useMessage } from 'naive-ui'
 import { api } from '@/api/client'
 import { useAdminStore } from '@/stores/admin'
-import { getErrorMessage, getApiError } from '@/utils/errors'
+import { getApiError, getErrorMessage } from '@/utils/errors'
 import AdminFiltersBar from '@/components/admin/AdminFiltersBar.vue'
+import AdminBatchAssignDialog from '@/components/admin/AdminBatchAssignDialog.vue'
 import AdminTicketTable from '@/components/admin/AdminTicketTable.vue'
 import AdminTicketDetail from '@/components/admin/AdminTicketDetail.vue'
 import AdminUserManagement from '@/components/admin/AdminUserManagement.vue'
 
 const { t } = useI18n()
+const message = useMessage()
 const adminStore = useAdminStore()
 const {
   loading,
@@ -33,9 +35,12 @@ const {
 
 const detailVisible = ref(false)
 const adminTab = ref('tickets')
+const checkedTicketNos = ref<string[]>([])
+const selectionAnchorTicketNo = ref<string | null>(null)
+const batchAssignVisible = ref(false)
+const batchAssignLoading = ref(false)
 
 onMounted(() => {
-  // 加载可指派用户列表（普通管理员可用）
   void loadAssignees()
   void loadTickets()
 })
@@ -46,7 +51,7 @@ async function loadAssignees(): Promise<void> {
     const data = await api.admin.Ticket.get.assignees()
     adminStore.assignees = data.users
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('messages.userLoadFailed')))
+    message.error(getErrorMessage(error, t('messages.userLoadFailed')))
   } finally {
     adminStore.usersLoading = false
   }
@@ -60,20 +65,21 @@ async function loadTickets(nextPage = 1): Promise<void> {
     const data = await api.admin.Ticket.get.list({
       page: adminStore.page,
       pageSize: adminStore.pageSize,
-      status: statusFilter.value !== null ? statusFilter.value : undefined,
-      type: typeFilter.value !== null ? typeFilter.value : undefined,
-      severity: severityFilter.value !== null ? severityFilter.value : undefined,
+      status: statusFilter.value ?? undefined,
+      type: typeFilter.value ?? undefined,
+      severity: severityFilter.value ?? undefined,
       keyword: keyword.value.trim() || undefined,
-      assignedTo: assignedFilter.value !== null ? assignedFilter.value : undefined,
+      assignedTo: assignedFilter.value ?? undefined,
     })
     const maxPage = Math.max(1, Math.ceil((data.pagination?.total || 0) / adminStore.pageSize))
     adminStore.tickets = data.tickets
     adminStore.total = data.pagination?.total || 0
+    clearTicketSelection()
     if (adminStore.page > maxPage) adminStore.page = maxPage
-  } catch (error: any) {
+  } catch (error: unknown) {
     const apiError = getApiError(error)
     if (apiError?.code !== 'UNAUTHORIZED') {
-      ElMessage.error(getErrorMessage(error, t('messages.adminLoadFailed')))
+      message.error(getErrorMessage(error, t('messages.adminLoadFailed')))
     } else {
       adminStore.logout(false)
     }
@@ -130,7 +136,6 @@ async function handleSelectTicket(ticketNo: string): Promise<void> {
   adminStore.loading = true
   try {
     const data = await api.admin.Ticket.get.detail({ ticketNo })
-
     const detailPayload = data as unknown as {
       operations?: unknown
       ticket?: {
@@ -143,8 +148,7 @@ async function handleSelectTicket(ticketNo: string): Promise<void> {
     if (operationsFromDetail.length === 0) {
       try {
         const opsData = await api.admin.Ticket.get.getOperations({ ticketNo })
-        const operationsFromFallback = normalizeTicketOperations((opsData as unknown as { operations?: unknown }).operations)
-        operations = operationsFromFallback
+        operations = normalizeTicketOperations((opsData as { operations?: unknown }).operations)
       } catch {
         operations = []
       }
@@ -158,7 +162,7 @@ async function handleSelectTicket(ticketNo: string): Promise<void> {
     adminStore.updateForm.adminNote = data.ticket.admin_note || ''
     adminStore.updateForm.assignedTo = data.ticket.assigned_to || null
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('messages.adminDetailFailed')))
+    message.error(getErrorMessage(error, t('messages.adminDetailFailed')))
   } finally {
     adminStore.loading = false
   }
@@ -169,8 +173,6 @@ async function handleSaveTicket(): Promise<void> {
   adminStore.updating = true
   try {
     const bugType: FeedbackType = 0
-    
-    // 更新工单基本信息
     await api.admin.Ticket.post.update({
       ticketNo: adminStore.selectedTicketNo,
       status: updateForm.value.status,
@@ -178,7 +180,6 @@ async function handleSaveTicket(): Promise<void> {
       adminNote: updateForm.value.adminNote,
     })
 
-    // 如果指派有变化，单独调用指派接口
     const newAssignedValue = updateForm.value.assignedTo || null
     if (adminStore.selectedTicket.assigned_to !== newAssignedValue) {
       await api.admin.Ticket.post.assign({
@@ -187,12 +188,74 @@ async function handleSaveTicket(): Promise<void> {
       })
     }
 
-    ElMessage.success(t('messages.adminUpdateSuccess'))
+    message.success(t('messages.adminUpdateSuccess'))
     await Promise.all([loadTickets(adminStore.page), handleSelectTicket(adminStore.selectedTicketNo)])
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('messages.adminUpdateFailed')))
+    message.error(getErrorMessage(error, t('messages.adminUpdateFailed')))
   } finally {
     adminStore.updating = false
+  }
+}
+
+function clearTicketSelection(): void {
+  checkedTicketNos.value = []
+  selectionAnchorTicketNo.value = null
+}
+
+function handleToggleTicketChecked(payload: { ticketNo: string; checked: boolean; shiftKey: boolean }): void {
+  const ticketNosOnPage = tickets.value.map((ticket) => ticket.ticket_no)
+  const currentIndex = ticketNosOnPage.indexOf(payload.ticketNo)
+  if (currentIndex === -1) return
+
+  const selected = new Set(checkedTicketNos.value)
+  const anchorIndex = selectionAnchorTicketNo.value ? ticketNosOnPage.indexOf(selectionAnchorTicketNo.value) : -1
+
+  if (payload.shiftKey && anchorIndex !== -1) {
+    const start = Math.min(anchorIndex, currentIndex)
+    const end = Math.max(anchorIndex, currentIndex)
+    for (let index = start; index <= end; index += 1) {
+      const ticketNo = ticketNosOnPage[index]
+      if (payload.checked) {
+        selected.add(ticketNo)
+      } else {
+        selected.delete(ticketNo)
+      }
+    }
+  } else if (payload.checked) {
+    selected.add(payload.ticketNo)
+  } else {
+    selected.delete(payload.ticketNo)
+  }
+
+  checkedTicketNos.value = ticketNosOnPage.filter((ticketNo) => selected.has(ticketNo))
+  selectionAnchorTicketNo.value = payload.ticketNo
+}
+
+function handleToggleAllTicketsChecked(checked: boolean): void {
+  checkedTicketNos.value = checked ? tickets.value.map((ticket) => ticket.ticket_no) : []
+  selectionAnchorTicketNo.value = null
+}
+
+async function handleBatchAssign(assignedTo: number): Promise<void> {
+  if (checkedTicketNos.value.length === 0) {
+    message.warning(t('messages.batchAssignEmpty'))
+    batchAssignVisible.value = false
+    return
+  }
+
+  batchAssignLoading.value = true
+  try {
+    const data = await api.admin.Ticket.post.batchAssign({
+      ticketNos: checkedTicketNos.value,
+      assignedTo,
+    })
+    message.success(t('messages.batchAssignSuccess', { count: data.affected }))
+    batchAssignVisible.value = false
+    await loadTickets(adminStore.page)
+  } catch (error) {
+    message.error(getErrorMessage(error, t('messages.batchAssignFailed')))
+  } finally {
+    batchAssignLoading.value = false
   }
 }
 </script>
@@ -202,13 +265,13 @@ async function handleSaveTicket(): Promise<void> {
     <div class="admin-workspace__header">
       <span class="admin-workspace__user">
         {{ currentUser?.username }}
-        <el-tag v-if="isSuperAdmin" size="small" type="warning">{{ t('admin.superAdmin') }}</el-tag>
+        <n-tag v-if="isSuperAdmin" size="small" type="warning" :bordered="false">{{ t('admin.superAdmin') }}</n-tag>
       </span>
-      <el-button size="small" @click="adminStore.logout()">{{ t('common.logout') }}</el-button>
+      <n-button size="small" @click="adminStore.logout()">{{ t('common.logout') }}</n-button>
     </div>
 
-    <el-tabs v-model="adminTab" type="card" class="admin-tabs">
-      <el-tab-pane :label="t('admin.queueTitle')" name="tickets">
+    <n-tabs v-model:value="adminTab" type="segment" class="admin-tabs">
+      <n-tab-pane :tab="t('admin.queueTitle')" name="tickets">
         <section class="admin-pane admin-pane--split">
           <div class="admin-pane__top">
             <AdminFiltersBar
@@ -230,35 +293,53 @@ async function handleSaveTicket(): Promise<void> {
               :page="page"
               :page-size="pageSize"
               :total="total"
+              :checked-ticket-nos="checkedTicketNos"
+              :can-batch-assign="checkedTicketNos.length > 0"
               @select="handleSelectTicket"
+              @toggle-ticket-checked="handleToggleTicketChecked"
+              @toggle-all-tickets-checked="handleToggleAllTicketsChecked"
+              @batch-assign="batchAssignVisible = true"
               @page-change="loadTickets"
-              @page-size-change="(n: number) => { adminStore.pageSize = n; loadTickets(1) }"
+              @page-size-change="(value: number) => { adminStore.pageSize = value; loadTickets(1) }"
             />
           </div>
         </section>
 
-        <el-drawer
-          v-model="detailVisible"
-          size="720px"
-          :with-header="false"
-          destroy-on-close
+        <AdminBatchAssignDialog
+          v-model:show="batchAssignVisible"
+          :loading="batchAssignLoading"
+          :selected-count="checkedTicketNos.length"
+          :assignees="adminStore.assignees"
+          @confirm="handleBatchAssign"
+        />
+
+        <n-drawer
+          v-model:show="detailVisible"
+          :width="720"
+          placement="right"
+          :auto-focus="false"
           class="admin-detail-drawer"
         >
-          <AdminTicketDetail
-            :ticket="selectedTicket"
-            :update-form="updateForm"
-            :updating="updating"
-            @save="handleSaveTicket()"
-          />
-        </el-drawer>
-      </el-tab-pane>
+          <n-drawer-content
+            closable
+            body-content-style="padding: 12px 16px 20px; background: linear-gradient(180deg, rgba(247, 255, 253, 0.9), rgba(255, 255, 255, 1)); overflow-y: auto;"
+          >
+            <AdminTicketDetail
+              :ticket="selectedTicket"
+              :update-form="updateForm"
+              :updating="updating"
+              @save="handleSaveTicket()"
+            />
+          </n-drawer-content>
+        </n-drawer>
+      </n-tab-pane>
 
-      <el-tab-pane v-if="isSuperAdmin" :label="t('admin.userManagement')" name="users">
+      <n-tab-pane v-if="isSuperAdmin" :tab="t('admin.userManagement')" name="users">
         <section class="admin-pane admin-pane--scroll">
           <AdminUserManagement />
         </section>
-      </el-tab-pane>
-    </el-tabs>
+      </n-tab-pane>
+    </n-tabs>
   </div>
 </template>
 
@@ -287,36 +368,6 @@ async function handleSaveTicket(): Promise<void> {
   color: var(--ink);
 }
 
-.admin-tabs {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.admin-tabs :deep(.el-tabs__header) {
-  margin: 0;
-}
-
-.admin-tabs :deep(.el-tabs__content) {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  padding-top: 10px;
-}
-
-.admin-tabs :deep(.el-tab-pane) {
-  height: 100%;
-  min-height: 0;
-}
-
-.admin-tabs :deep(.el-tabs__item) {
-  height: 34px;
-  padding: 0 12px;
-  font-size: 13px;
-}
-
 .admin-pane {
   height: 100%;
   min-height: 0;
@@ -340,15 +391,8 @@ async function handleSaveTicket(): Promise<void> {
 }
 
 .admin-pane--scroll {
-  overflow: auto;
-  padding-right: 4px;
-}
-
-.admin-detail-drawer :deep(.el-drawer__body) {
-  padding: 12px 16px 20px;
-  background: linear-gradient(180deg, rgba(247, 255, 253, 0.9), rgba(255, 255, 255, 1));
-  overflow-y: auto;
-  max-height: 100vh;
+  display: flex;
+  overflow: hidden;
 }
 
 .admin-detail-drawer :deep(.admin-detail-card) {
@@ -356,8 +400,8 @@ async function handleSaveTicket(): Promise<void> {
 }
 
 @media (max-width: 1024px) {
-  .admin-detail-drawer :deep(.el-drawer) {
-    max-width: 90vw !important;
+  .admin-detail-drawer :deep(.n-drawer) {
+    max-width: 90vw;
   }
 }
 
@@ -366,9 +410,9 @@ async function handleSaveTicket(): Promise<void> {
     flex-direction: column;
     align-items: flex-start;
   }
-  
-  .admin-detail-drawer :deep(.el-drawer) {
-    max-width: 100vw !important;
+
+  .admin-detail-drawer :deep(.n-drawer) {
+    max-width: 100vw;
   }
 }
 </style>
