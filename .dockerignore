@@ -1,0 +1,13 @@
+.git
+.gitignore
+.claude
+.agents
+.vscode
+.env
+
+web/node_modules
+web/dist
+server/config/database.php
+
+Dockerfile*
+**/.DS_Store

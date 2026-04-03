@@ -34,6 +34,90 @@
 
 ## 🚀 5分钟本地跑起来
 
+### Docker 一键运行
+
+如果你想把前后端和 MySQL 一起跑起来，可以直接用 Docker Compose：
+
+```bash
+# 可选：先复制默认环境变量配置
+cp .env.example .env
+
+# 启动
+docker compose up -d --build
+```
+
+启动后默认访问：
+- 前端：http://127.0.0.1:8001
+- 接口健康检查：http://127.0.0.1:8001/api?s=system/Status/health
+
+### Docker 环境变量
+
+默认提供了一个示例文件：[.env.example](.env.example)
+
+可配置项：
+
+- `APP_PORT`：本机映射端口，默认 `8001`
+- `MYSQL_DATABASE`：默认 `game_feedback`
+- `MYSQL_USER`：默认 `game_feedback`
+- `MYSQL_PASSWORD`：默认 `game_feedback`
+- `MYSQL_ROOT_PASSWORD`：默认 `root`
+- `APP_DB_HOST` / `APP_DB_PORT` / `APP_DB_DATABASE` / `APP_DB_USERNAME` / `APP_DB_PASSWORD`：可选覆盖已安装系统实际使用的数据库连接参数
+- `NGINX_CLIENT_MAX_BODY_SIZE`：Nginx 请求体大小限制，默认 `20m`
+- `PHP_POST_MAX_SIZE`：PHP `post_max_size`，默认 `20M`
+- `PHP_UPLOAD_MAX_FILESIZE`：PHP `upload_max_filesize`，默认 `20M`
+- `PHP_MAX_FILE_UPLOADS`：PHP `max_file_uploads`，默认 `20`
+- `APP_CORS_ALLOWED_ORIGINS`：逗号分隔的跨域白名单，如 `https://a.com,https://b.com`
+- `APP_ALLOW_LOCALHOST_CORS`：是否允许 localhost 跨域，支持 `true/false`
+- `APP_TIMEZONE`：运行时时区覆盖
+- `APP_UPLOAD_MODE`：附件模式，支持 `off/local/qiniu`
+- `APP_UPLOAD_MAX_BYTES`：业务层附件大小限制，单位字节
+- `APP_QINIU_ACCESS_KEY` / `APP_QINIU_SECRET_KEY` / `APP_QINIU_BUCKET` / `APP_QINIU_DOMAIN`
+- `APP_QINIU_DOWNLOAD_DOMAIN`：可选下载域名覆盖
+- `APP_QINIU_DIRECT_ACCESS`：是否直连七牛，支持 `true/false`
+- `APP_QINIU_UPLOAD_HOST`：自定义上传节点，支持逗号分隔
+- `APP_QINIU_CONNECT_TIMEOUT` / `APP_QINIU_UPLOAD_TIMEOUT`：上传超时，单位秒
+- `APP_CURL_VERIFY_SSL` / `APP_CURL_USE_NATIVE_CA`：cURL SSL 相关开关，支持 `true/false`
+- `APP_CURL_CA_FILE` / `APP_CURL_CA_PATH`：自定义 CA 文件或目录
+
+如果你想修改端口、数据库账号、上传限制或运行时业务配置，可以先复制后再启动：
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+### 首次安装（Docker）
+
+第一次启动时，打开首页会进入安装向导。
+
+数据库连接请填写 Compose 内置的 MySQL 服务信息：
+
+- Host：优先使用 `.env` 里的 `APP_DB_HOST`；未设置时填写 `mysql`
+- Port：优先使用 `.env` 里的 `APP_DB_PORT`；未设置时填写 `3306`
+- Database：优先使用 `.env` 里的 `APP_DB_DATABASE`；未设置时填写 `.env` 中的 `MYSQL_DATABASE`
+- Username：优先使用 `.env` 里的 `APP_DB_USERNAME`；未设置时填写 `.env` 中的 `MYSQL_USER`
+- Password：优先使用 `.env` 里的 `APP_DB_PASSWORD`；未设置时填写 `.env` 中的 `MYSQL_PASSWORD`
+
+安装完成后，系统会自动写入运行时数据库配置，并保存在 Docker 卷中；之后重启容器不会丢失安装状态。
+
+说明：`app.php` / `database.php` 仍然是默认值与持久化来源；`.env` 里的 `APP_*` 变量只做运行时覆盖。删除这些环境变量后，系统会自动回退到文件中的配置值。即使设置了环境变量，没有 `database.php` 也仍然视为“未安装”。数据库连接参数也支持通过 `APP_DB_*` 可选覆盖，但这同样只影响运行时，不会改写 `database.php`。
+
+常用命令：
+
+```bash
+# 启动
+docker compose up -d --build
+
+# 查看日志
+docker compose logs -f
+
+# 停止（保留数据库和运行数据）
+docker compose down
+
+# 停止并清空 MySQL / 安装状态 / 上传文件等所有卷数据
+docker compose down -v
+```
+
 ### 准备工作
 
 1. **环境要求**：

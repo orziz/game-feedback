@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
-$appConfig = require __DIR__ . '/../config/app.php';
+require_once __DIR__ . '/../src/autoload.php';
+
+$appConfig = GameFeedback\Support\RuntimeConfig::overlayAppConfig(require __DIR__ . '/../config/app.php');
 
 $origin = (string)($_SERVER['HTTP_ORIGIN'] ?? '');
 $allowedOrigins = is_array($appConfig['cors_allowed_origins'] ?? null) ? $appConfig['cors_allowed_origins'] : [];
@@ -61,9 +63,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
     exit;
 }
 
-require_once __DIR__ . '/../src/autoload.php';
-
-$databaseConfigPath = __DIR__ . '/../config/database.php';
+$databaseConfigPath = (string)(getenv('GAME_FEEDBACK_DATABASE_CONFIG') ?: (__DIR__ . '/../config/database.php'));
 
 $app = new GameFeedback\App($appConfig, $databaseConfigPath);
 $app->run();

@@ -1,0 +1,85 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: game-feedback-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-game_feedback}
+      MYSQL_USER: ${MYSQL_USER:-game_feedback}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-game_feedback}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  php-fpm:
+    build:
+      context: .
+      dockerfile: docker/php-fpm/Dockerfile
+    container_name: game-feedback-php
+    restart: unless-stopped
+    environment:
+      GAME_FEEDBACK_DATABASE_CONFIG: /var/www/app/runtime/database.php
+      PHP_POST_MAX_SIZE: ${PHP_POST_MAX_SIZE:-20M}
+      PHP_UPLOAD_MAX_FILESIZE: ${PHP_UPLOAD_MAX_FILESIZE:-20M}
+      PHP_MAX_FILE_UPLOADS: ${PHP_MAX_FILE_UPLOADS:-20}
+      APP_DB_HOST: ${APP_DB_HOST:-}
+      APP_DB_PORT: ${APP_DB_PORT:-}
+      APP_DB_DATABASE: ${APP_DB_DATABASE:-}
+      APP_DB_USERNAME: ${APP_DB_USERNAME:-}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-}
+      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-}
+      APP_ALLOW_LOCALHOST_CORS: ${APP_ALLOW_LOCALHOST_CORS:-}
+      APP_TIMEZONE: ${APP_TIMEZONE:-}
+      APP_UPLOAD_MODE: ${APP_UPLOAD_MODE:-}
+      APP_UPLOAD_MAX_BYTES: ${APP_UPLOAD_MAX_BYTES:-}
+      APP_QINIU_ACCESS_KEY: ${APP_QINIU_ACCESS_KEY:-}
+      APP_QINIU_SECRET_KEY: ${APP_QINIU_SECRET_KEY:-}
+      APP_QINIU_BUCKET: ${APP_QINIU_BUCKET:-}
+      APP_QINIU_DOMAIN: ${APP_QINIU_DOMAIN:-}
+      APP_QINIU_DOWNLOAD_DOMAIN: ${APP_QINIU_DOWNLOAD_DOMAIN:-}
+      APP_QINIU_DIRECT_ACCESS: ${APP_QINIU_DIRECT_ACCESS:-}
+      APP_QINIU_UPLOAD_HOST: ${APP_QINIU_UPLOAD_HOST:-}
+      APP_QINIU_CONNECT_TIMEOUT: ${APP_QINIU_CONNECT_TIMEOUT:-}
+      APP_QINIU_UPLOAD_TIMEOUT: ${APP_QINIU_UPLOAD_TIMEOUT:-}
+      APP_CURL_VERIFY_SSL: ${APP_CURL_VERIFY_SSL:-}
+      APP_CURL_USE_NATIVE_CA: ${APP_CURL_USE_NATIVE_CA:-}
+      APP_CURL_CA_FILE: ${APP_CURL_CA_FILE:-}
+      APP_CURL_CA_PATH: ${APP_CURL_CA_PATH:-}
+    volumes:
+      - app_runtime:/var/www/app/runtime
+      - app_storage:/var/www/app/server/storage
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    container_name: game-feedback-nginx
+    restart: unless-stopped
+    environment:
+      NGINX_CLIENT_MAX_BODY_SIZE: ${NGINX_CLIENT_MAX_BODY_SIZE:-20m}
+      PHP_POST_MAX_SIZE: ${PHP_POST_MAX_SIZE:-20M}
+      PHP_UPLOAD_MAX_FILESIZE: ${PHP_UPLOAD_MAX_FILESIZE:-20M}
+      PHP_MAX_FILE_UPLOADS: ${PHP_MAX_FILE_UPLOADS:-20}
+    ports:
+      - "${APP_PORT:-8001}:80"
+    volumes:
+      - app_runtime:/var/www/app/runtime:ro
+    depends_on:
+      - php-fpm
+
+volumes:
+  mysql_data:
+  app_runtime:
+  app_storage:
