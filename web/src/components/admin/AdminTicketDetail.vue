@@ -371,7 +371,7 @@ onBeforeUnmount(() => {
 
 .admin-detail-card__image-preview {
   display: inline-flex;
-  max-width: min(100%, 420px);
+  max-width: min(100%, 320px);
   overflow: hidden;
   border: 1px solid rgba(15, 118, 110, 0.14);
   border-radius: 12px;
