@@ -1,158 +1,169 @@
-# game-feedback
+# 🎮 游戏反馈工单系统
 
-这是一个给游戏项目用的反馈工单系统。
+一个专为游戏项目打造的**轻量级反馈工单系统**。
 
-它解决三件事：
+它能帮你轻松解决三件核心事情：
 
-1. 玩家提交反馈（BUG、建议、优化等）
-2. 玩家按工单号/关键词查询进度
-3. 管理员在后台处理、指派、记录结论
+1. **玩家提交反馈** —— BUG、优化建议、功能需求，一键提交
+2. **玩家自助查询** —— 输入工单号或关键词，随时查看处理进度
+3. **管理员高效处理** —— 后台统一管理、指派给开发、记录处理结论
 
-页面截图：
+### 界面预览
 
-![玩家端](./images/1.png)
-![查询页](./images/2.png)
-![管理端](./images/3.png)
+![玩家提交页面](./images/1.png)
+![工单查询页面](./images/2.png)
+![管理后台](./images/3.png)
+
+**简单、直观、上手快** —— 无论是小团队还是中型项目，都能快速部署使用。
 
 ## 适合谁用
 
-- 小中型游戏团队，需要一个能快速落地的反馈系统
-- 希望前后端分离、可自行部署、不依赖第三方 SaaS
-- 运维环境是常见的 PHP + MySQL
+如果你是以下情况之一，这个项目会特别适合你：
+
+- **小中型游戏团队**：需要一个简单好用的反馈收集和处理系统
+- **独立开发者或工作室**：不想依赖昂贵的SaaS服务，想完全掌控数据
+- **PHP/MySQL 技术栈**：喜欢前后端分离、可自行部署的轻量方案
+
+无需复杂配置，开箱即用。
 
 ## 技术栈
 
-- 前端：Vue 3 + TypeScript + Vite + Element Plus
-- 后端：PHP 7.2+
-- 数据库：MySQL 5.6+
+- **前端**：Vue 3 + TypeScript + Vite + Element Plus（现代、响应式界面）
+- **后端**：纯PHP 7.2+（兼容性强，无框架依赖）
+- **数据库**：MySQL 5.6+（自动建表，简单可靠）
 
-## 5 分钟本地跑起来
+## 🚀 5分钟本地跑起来
 
-### 1. 准备环境
+### 准备工作
 
-- Node.js 18+
-- PHP 7.2+
-- MySQL 5.6+
+1. **环境要求**：
+   - Node.js 18+
+   - PHP 7.2+
+   - MySQL 5.6+
 
-### 2. 先建一个空数据库
+2. **创建数据库**（只需执行一次）：
 
 ```sql
-CREATE DATABASE game_feedback DEFAULT CHARACTER SET utf8mb4;
+CREATE DATABASE game_feedback DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-注意：项目会自动建表，但不会自动创建数据库本身。
+> 项目会自动创建表结构，但数据库需要你手动先建好。
 
-### 3. 启动后端
+### 启动后端服务
 
 ```bash
+# 进入后端目录
+cd server/public
+
+# 启动PHP内置服务器
+php -S 127.0.0.1:8000 router.php
+```
+
+**验证后端是否正常**：
+- 访问 [http://127.0.0.1:8000/index.php](http://127.0.0.1:8000/index.php)
+- 或健康检查： [http://127.0.0.1:8000/index.php?action=system.status](http://127.0.0.1:8000/index.php?action=system.status)
+
+### 启动前端
+
+```bash
+# 新开终端
+cd web
+npm install          # 首次需要
+npm run dev
+```
+
+前端默认运行在 **http://127.0.0.1:5173**，开发模式下会自动代理API请求到后端。
+
+## 第一次打开页面会发生什么
+
+第一次访问前端时，如果系统还未安装，会自动弹出**安装向导面板**。
+
+按照提示填写数据库连接信息和管理员账号密码，点击安装按钮，系统会自动完成以下操作：
+
+1. 初始化所有数据库表结构
+2. 生成 `server/config/database.php` 配置文件
+3. 记录当前的 schema 版本号
+
+安装成功后即可立即使用！
+
+## 日常开发命令
+
+```bash
+# 前端开发（推荐，带热更新）
+cd web
+npm run dev
+
+# 前端打包生产版本
+npm run build
+
+# 启动后端本地服务器
 cd server/public
 php -S 127.0.0.1:8000 router.php
 ```
 
-可用性检查：
+## 📦 升级说明（很重要！）
 
-- 后端入口：<http://127.0.0.1:8000/index.php>
-- 健康检查：<http://127.0.0.1:8000/index.php?s=system/Status/health>
+本项目采用**版本化数据库迁移**机制。
 
-### 4. 启动前端
+**核心逻辑**：
+- 版本信息保存在 `server/config/database.php` 的 `schema_version`
+- 系统启动时自动检测版本差异
+- 仅在需要升级时执行迁移脚本
+- 成功后自动更新版本号
 
-```bash
-cd web
-npm install
-npm run dev
-```
-
-默认地址：<http://127.0.0.1:5173>
-
-开发模式下，前端 `/api` 会代理到 `http://127.0.0.1:8000/index.php`。
-
-## 第一次打开页面会发生什么
-
-如果系统还没安装，页面会出现安装面板。
-
-安装成功后会自动完成：
-
-1. 初始化数据库结构
-2. 生成 `server/config/database.php`
-3. 写入 `schema_version`
-
-## 日常开发最常用命令
-
-```bash
-# 前端开发
-cd web
-npm run dev
-
-# 前端打包
-npm run build
-
-# 后端本地服务
-cd ../server/public
-php -S 127.0.0.1:8000 router.php
-```
-
-## 升级说明（务必看）
-
-本项目是“版本化迁移”，不是“每次请求都扫表结构”。
-
-核心逻辑：
-
-- 当前版本记录在 `server/config/database.php` 的 `schema_version`
-- 程序启动后对比版本
-- 仅在版本落后时执行迁移
-- 迁移成功后回写版本号
-
-推荐升级步骤：
-
+**推荐升级流程**：
 1. 备份数据库
 2. 备份 `server/config/database.php`
-3. 部署新代码
-4. 触发一次请求（打开前端或访问 health）
-5. 确认 `schema_version` 已更新
-6. 回归验证提交、查询、后台处理流程
+3. 替换新代码
+4. 访问前端页面触发迁移
+5. 检查版本是否更新
+6. 测试提交、查询和后台功能
 
-## 常见问题
+## ❓ 常见问题
 
-### 一直提示“系统未安装”
+### 一直提示“系统未安装”？
 
-通常是这三类问题：
+常见原因：
+- `server/config/database.php` 文件不存在或权限问题
+- 数据库连接失败（主机、账号、密码错误）
+- 没有提前创建数据库
 
-1. `server/config/database.php` 不存在或不可读
-2. 数据库连不上
-3. 只建了代码，没提前创建数据库
+### 接口返回 500 错误？
 
-### 接口返回 500
+请查看后端日志，重点检查：
+- 数据库用户是否拥有 `CREATE`、`ALTER`、`INDEX` 权限
+- `schema_version` 是否与代码版本一致
 
-优先检查：
+### 附件上传/下载有问题？
 
-1. 后端日志里的真实异常
-2. 数据库用户是否有 `CREATE` / `ALTER` / `INDEX` 权限
-3. `schema_version` 与当前代码是否匹配
+确认以下几点：
+- `storage/uploads/` 目录有写入权限
+- PHP 配置中 `upload_max_filesize` 和 `post_max_size` 足够大
+- 云存储配置（七牛等）填写正确
 
-### 上传/附件异常
-
-请确认：
-
-1. 上传目录有写权限
-2. PHP 上传大小限制满足需求
-3. 相关云存储配置（如有）填写正确
-
-## 目录一览
+## 项目目录结构
 
 ```text
 .
-├── web/                    # 前端工程
-├── server/                 # 后端工程
-│   ├── public/             # HTTP 入口
-│   ├── src/                # 业务代码
-│   └── config/             # 应用配置
-├── nginx.example.conf      # Nginx 配置参考
+├── web/                    # 前端（Vue 3 + TypeScript）
+├── server/                 # 后端核心
+│   ├── public/             # 入口文件（index.php）
+│   ├── src/                # 业务逻辑（API、Repository、工具类）
+│   └── config/             # 配置文件
+├── nginx.example.conf      # Nginx 部署示例配置
+├── images/                 # 文档截图
 └── README.md
 ```
 
-## 部署建议
+## 生产环境部署建议
 
-- 前端：先 `npm run build`，部署静态资源
-- 后端：建议 Nginx/Apache + PHP-FPM
-- 配置文件：限制 `server/config` 目录访问权限
-- 安全：不要把 `server/config/database.php` 提交到公开仓库
+- **前端**：运行 `npm run build` 后部署静态文件
+- **后端**：推荐使用 Nginx + PHP-FPM
+- **安全**：限制 `server/config/` 目录的外部访问
+- **重要**：**不要**将包含敏感信息的 `database.php` 提交到 Git 仓库
+
+---
+
+**项目维护中，欢迎提出 Issue 和 PR！**
+
+祝使用愉快，收集到更多宝贵的玩家反馈 ✨
