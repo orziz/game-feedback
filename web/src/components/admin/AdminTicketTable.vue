@@ -123,10 +123,10 @@ const columns = computed<UiDataTableColumns<TicketRecord>>(() => [
     align: 'center',
     render: (row: TicketRecord) => {
       if (!row.assigned_to) {
-        return h('span', { class: 'unassigned' }, t('common.unassigned'))
+        return h('span', { class: 'assignee-pill assignee-pill--unassigned' }, t('common.unassigned'))
       }
       const assignedUsername = (row as TicketRecord & { assigned_username?: string | null }).assigned_username
-      return h('span', { class: 'assigned-user' }, assignedUsername || String(row.assigned_to))
+      return h('span', { class: 'assignee-pill assignee-pill--assigned' }, assignedUsername || String(row.assigned_to))
     },
   },
   {
@@ -290,21 +290,41 @@ function createRowProps(row: TicketRecord) {
   min-height: 28px;
 }
 
-.unassigned {
-  display: inline-block;
-  padding: 2px 6px;
+.assignee-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 74px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
   font-size: 12px;
-  color: var(--ink-soft);
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
-.assigned-user {
-  display: inline-block;
-  padding: 2px 6px;
-  font-size: 12px;
-  background: #dbeafe;
-  color: #1e40af;
-  border-radius: 999px;
-  font-weight: 600;
+.assignee-pill--assigned {
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(16, 185, 129, 0.28);
+  color: #047857;
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.04);
+}
+
+.assignee-pill--assigned::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.9;
+}
+
+.assignee-pill--unassigned {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.26);
+  color: #64748b;
 }
 
 @media (max-width: 768px) {
