@@ -370,14 +370,19 @@ onBeforeUnmount(() => {
 }
 
 .admin-detail-card__image-preview {
-  width: 180px;
-  max-width: 100%;
-  aspect-ratio: 4 / 3;
+  display: inline-flex;
+  max-width: min(100%, 420px);
   overflow: hidden;
   border: 1px solid rgba(15, 118, 110, 0.14);
   border-radius: 12px;
   background: linear-gradient(180deg, rgba(248, 251, 253, 0.95), rgba(255, 255, 255, 0.98));
-  object-fit: cover;
+}
+
+.admin-detail-card__image-preview :deep(img) {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
 }
 
 .admin-detail-card__tip {
