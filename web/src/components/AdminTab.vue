@@ -17,6 +17,7 @@ const {
   loading,
   statusFilter,
   typeFilter,
+  severityFilter,
   assignedFilter,
   keyword,
   tickets,
@@ -61,6 +62,7 @@ async function loadTickets(nextPage = 1): Promise<void> {
       pageSize: adminStore.pageSize,
       status: statusFilter.value !== null ? statusFilter.value : undefined,
       type: typeFilter.value !== null ? typeFilter.value : undefined,
+      severity: severityFilter.value !== null ? severityFilter.value : undefined,
       keyword: keyword.value.trim() || undefined,
       assignedTo: assignedFilter.value !== null ? assignedFilter.value : undefined,
     })
@@ -212,6 +214,7 @@ async function handleSaveTicket(): Promise<void> {
             <AdminFiltersBar
               v-model:status-filter="statusFilter"
               v-model:type-filter="typeFilter"
+              v-model:severity-filter="severityFilter"
               v-model:assigned-filter="assignedFilter"
               v-model:keyword="keyword"
               :loading="loading"

@@ -131,6 +131,7 @@ export default {
     filtersDescription: '按状态、类型或关键词筛选工单后点刷新，或直接点刷新查看最新列表。',
     statusFilterPlaceholder: '按状态筛选',
     typeFilterPlaceholder: '按类型筛选',
+    severityFilterPlaceholder: '按重要程度筛选',
     assignedFilterPlaceholder: '按指派用户筛选',
     keywordPlaceholder: '按标题或内容搜索',
     queueEyebrow: 'TICKET QUEUE',

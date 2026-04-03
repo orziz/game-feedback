@@ -8,6 +8,7 @@ import { useAdminStore } from '@/stores/admin'
 const props = defineProps<{
   statusFilter:  TicketStatus | null
   typeFilter:    FeedbackType | null
+  severityFilter: Severity | null
   assignedFilter: number | null
   keyword:       string
   loading:       boolean
@@ -17,6 +18,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:statusFilter':  [value: TicketStatus | null]
   'update:typeFilter':    [value: FeedbackType | null]
+  'update:severityFilter': [value: Severity | null]
   'update:assignedFilter': [value: number | null]
   'update:keyword':       [value: string]
   refresh: []
@@ -25,7 +27,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const appStore = useAppStore()
 const adminStore = useAdminStore()
-const { statusOptions, typeOptions } = storeToRefs(appStore)
+const { statusOptions, typeOptions, severityOptions } = storeToRefs(appStore)
 const { assignees } = storeToRefs(adminStore)
 
 const statusModel = computed({
@@ -36,6 +38,11 @@ const statusModel = computed({
 const typeModel = computed({
   get: () => props.typeFilter,
   set: (v) => emit('update:typeFilter', v === undefined || v === '' as any ? null : v),
+})
+
+const severityModel = computed({
+  get: () => props.severityFilter,
+  set: (v) => emit('update:severityFilter', v === undefined || v === '' as any ? null : v),
 })
 
 const assignedModel = computed({
@@ -67,6 +74,7 @@ const keywordModel = computed({
       <el-select
         v-model="statusModel"
         :placeholder="t('admin.statusFilterPlaceholder')"
+        class="admin-filters__compact-field"
         clearable
         @change="emit('refresh')"
       >
@@ -81,6 +89,7 @@ const keywordModel = computed({
       <el-select
         v-model="typeModel"
         :placeholder="t('admin.typeFilterPlaceholder')"
+        class="admin-filters__compact-field"
         clearable
         @change="emit('refresh')"
       >
@@ -93,8 +102,24 @@ const keywordModel = computed({
       </el-select>
 
       <el-select
+        v-model="severityModel"
+        :placeholder="t('admin.severityFilterPlaceholder')"
+        class="admin-filters__compact-field"
+        clearable
+        @change="emit('refresh')"
+      >
+        <el-option
+          v-for="sv in severityOptions"
+          :key="sv.value"
+          :label="sv.label"
+          :value="sv.value"
+        />
+      </el-select>
+
+      <el-select
         v-model="assignedModel"
         :placeholder="t('admin.assignedFilterPlaceholder')"
+        class="admin-filters__compact-field"
         clearable
         @change="emit('refresh')"
       >
@@ -159,8 +184,12 @@ const keywordModel = computed({
 .admin-filters {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(110px, 0.8fr) minmax(110px, 0.8fr) minmax(110px, 0.8fr) minmax(120px, 0.9fr) minmax(280px, 2.6fr);
   gap: 10px;
+}
+
+.admin-filters__compact-field {
+  min-width: 0;
 }
 
 .admin-filters-shell--compact {
@@ -189,6 +218,9 @@ const keywordModel = computed({
 @media (max-width: 900px) {
   .admin-filters-shell { grid-template-columns: 1fr; }
   .admin-filters-shell__actions { justify-content: flex-start; }
+  .admin-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 768px) {

@@ -131,6 +131,7 @@ export default {
     filtersDescription: 'Filter by status, type, or keyword then click Refresh — or just refresh to see the latest.',
     statusFilterPlaceholder: 'Filter by status',
     typeFilterPlaceholder: 'Filter by type',
+    severityFilterPlaceholder: 'Filter by severity',
     assignedFilterPlaceholder: 'Filter by assigned user',
     keywordPlaceholder: 'Search by title or content',
     queueEyebrow: 'TICKET QUEUE',

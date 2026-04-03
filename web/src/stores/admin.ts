@@ -31,10 +31,11 @@ export const useAdminStore = defineStore('admin', () => {
 
   const statusFilter = ref<TicketStatus | null>(null)
   const typeFilter = ref<FeedbackType | null>(null)
+  const severityFilter = ref<Severity | null>(null)
   const assignedFilter = ref<number | null>(null)
   const keyword = ref('')
   const page = ref(1)
-  const pageSize = ref(10)
+  const pageSize = ref(20)
   const total = ref(0)
 
   const tickets = ref<TicketRecord[]>([])
@@ -95,6 +96,7 @@ export const useAdminStore = defineStore('admin', () => {
     selectedTicket.value = null
     statusFilter.value = null
     typeFilter.value = null
+    severityFilter.value = null
     assignedFilter.value = null
     keyword.value = ''
     updateForm.value = createDefaultUpdateForm()
@@ -106,7 +108,7 @@ export const useAdminStore = defineStore('admin', () => {
 
   return {
     token, loading, updating, currentUser,
-    statusFilter, typeFilter, assignedFilter, keyword,
+    statusFilter, typeFilter, severityFilter, assignedFilter, keyword,
     page, pageSize, total, tickets,
     selectedTicketNo, selectedTicket, ticketOperations, updateForm,
     isAuthenticated, isSuperAdmin,

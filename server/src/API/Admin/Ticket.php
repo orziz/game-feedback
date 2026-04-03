@@ -67,6 +67,10 @@ final class Ticket extends AdminSubModule
         $typeEnum = $typeRaw !== '' ? TicketType::tryFrom((int)$typeRaw) : null;
         $type = $typeEnum !== null ? $typeEnum : null;
 
+        $severityRaw = Request::query('severity');
+        $severityEnum = $severityRaw !== '' ? TicketSeverity::tryFrom((int)$severityRaw) : null;
+        $severity = $severityEnum !== null ? $severityEnum : null;
+
         $assignedToRaw = Request::query('assignedTo');
         $assignedTo = $assignedToRaw !== '' ? $this->sanitizer->parseInt($assignedToRaw, 1, 9999999999) : null;
 
@@ -74,7 +78,7 @@ final class Ticket extends AdminSubModule
         $page = $this->sanitizer->parseInt(Request::query('page', '1'), 1, 100000);
         $pageSize = $this->sanitizer->parseInt(Request::query('pageSize', '20'), 5, 100);
 
-        $result = $this->createTicketRepository()->listTickets($status, $type, $keyword, $assignedTo, $page, $pageSize);
+        $result = $this->createTicketRepository()->listTickets($status, $type, $severity, $keyword, $assignedTo, $page, $pageSize);
 
         Responder::send([
             'ok' => true,

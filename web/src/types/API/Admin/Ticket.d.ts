@@ -22,6 +22,7 @@ declare namespace API.Admin.Ticket {
       pageSize?: number
       status?: TicketStatus
       type?: FeedbackType
+      severity?: Severity
       keyword?: string
       assignedTo?: number
     }

@@ -201,13 +201,14 @@ SQL;
      *
      * @param int|null $status      状态筛选（null 表示不筛选）
      * @param int|null $type        类型筛选（null 表示不筛选）
+        * @param int|null $severity    严重程度筛选（null 表示不筛选）
      * @param string   $keyword     标题/内容关键词（空字符串表示不筛选）
      * @param int|null $assignedTo  指派用户 ID 筛选（null 表示不筛选）
      * @param int      $page        页码（从 1 开始）
      * @param int      $pageSize    每页条数
      * @return array{total: int, items: array<int, array<string, mixed>>}
      */
-    public function listTickets(?int $status = null, ?int $type = null, string $keyword = '', ?int $assignedTo = null, int $page = 1, int $pageSize = 20): array
+    public function listTickets(?int $status = null, ?int $type = null, ?int $severity = null, string $keyword = '', ?int $assignedTo = null, int $page = 1, int $pageSize = 20): array
     {
         $baseSql = ' FROM feedback_tickets t LEFT JOIN admin_users u ON t.assigned_to = u.id WHERE 1=1';
         $params = [];
@@ -220,6 +221,11 @@ SQL;
         if ($type !== null) {
             $baseSql .= ' AND t.type = :type';
             $params[':type'] = $type;
+        }
+
+        if ($severity !== null) {
+            $baseSql .= ' AND t.severity = :severity';
+            $params[':severity'] = $severity;
         }
 
         if ($keyword !== '') {
