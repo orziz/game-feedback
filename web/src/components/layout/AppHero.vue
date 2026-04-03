@@ -5,7 +5,6 @@ import { useRoute, useRouter } from 'vue-router'
 
 const props = defineProps<{
   installed: boolean
-  systemVersion: string
   locale: LocaleCode
 }>()
 
@@ -32,20 +31,15 @@ function goAdmin(): void {
     <div class="app-bar__brand">
       <div class="app-bar__identity">
         <span class="app-bar__badge">{{ t('hero.eyebrow') }}</span>
-        <h1>{{ t('hero.title') }}</h1>
+        <div class="app-bar__title-row">
+          <h1>{{ t('hero.title') }}</h1>
+          <a class="app-bar__repo-link" href="https://github.com/orziz/game-feedback" target="_blank" rel="noreferrer">GitHub</a>
+        </div>
       </div>
       <p v-if="!isAdminRoute && !installed" class="app-bar__subtitle">{{ t('hero.setupSubtitle') }}</p>
     </div>
 
     <div class="app-bar__controls">
-      <div class="app-bar__meta">
-        <div class="app-bar__version-pill" :title="t('hero.versionTitle')">
-          <span class="app-bar__version-label">{{ t('hero.versionLabel') }}</span>
-          <strong class="app-bar__version-value">{{ props.systemVersion }}</strong>
-        </div>
-        <a class="app-bar__repo-link" href="https://github.com/orziz/game-feedback" target="_blank">GitHub</a>
-      </div>
-
       <div class="app-bar__switches">
         <div class="app-bar__route-switch">
           <button
@@ -138,6 +132,14 @@ function goAdmin(): void {
   text-transform: uppercase;
 }
 
+.app-bar__title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
 .app-bar__identity h1 {
   margin: 0;
   min-width: 0;
@@ -160,44 +162,25 @@ function goAdmin(): void {
   gap: 10px;
 }
 
-.app-bar__meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.app-bar__version-pill {
+.app-bar__repo-link {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
+  min-height: 28px;
+  padding: 0 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.9);
-  color: #0e3b45;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
-}
-
-.app-bar__version-label {
-  font-size: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(241, 250, 251, 0.9);
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #49717a;
-}
-
-.app-bar__version-value {
-  font-size: 12px;
-  font-family: 'JetBrains Mono', 'Consolas', monospace;
-}
-
-.app-bar__repo-link {
-  color: rgba(241, 250, 251, 0.82);
-  font-size: 12px;
   text-decoration: none;
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
 .app-bar__repo-link:hover {
-  text-decoration: underline;
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.28);
+  transform: translateY(-1px);
 }
 
 .app-bar__switches {
@@ -270,11 +253,6 @@ function goAdmin(): void {
     width: 100%;
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .app-bar__meta {
-    justify-content: space-between;
-    width: 100%;
   }
 
   .app-bar__route-switch,

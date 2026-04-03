@@ -30,37 +30,57 @@ const bugType: FeedbackType = 0
 type UiDataTableColumns<T> = DataTableColumns<T>
 let lastShiftKey = false
 
+function emitTicketChecked(ticketNo: string, checked: boolean, shiftKey: boolean): void {
+  emit('toggle-ticket-checked', {
+    ticketNo,
+    checked,
+    shiftKey,
+  })
+}
+
+function handleSelectionCellClick(row: TicketRecord, event: MouseEvent): void {
+  lastShiftKey = event.shiftKey
+  event.stopPropagation()
+  emitTicketChecked(row.ticket_no, !props.checkedTicketNos.includes(row.ticket_no), event.shiftKey)
+}
+
 const isAllChecked = computed(() => props.tickets.length > 0 && props.tickets.every((ticket) => props.checkedTicketNos.includes(ticket.ticket_no)))
 const isPartiallyChecked = computed(() => props.checkedTicketNos.length > 0 && !isAllChecked.value)
 
 const columns = computed<UiDataTableColumns<TicketRecord>>(() => [
   {
     key: 'selection',
-    width: 48,
+    width: 60,
     align: 'center',
-    title: () => h(NCheckbox, {
-      checked: isAllChecked.value,
-      indeterminate: isPartiallyChecked.value,
-      onUpdateChecked: (checked: boolean) => emit('toggle-all-tickets-checked', checked),
+    title: () => h('div', {
+      class: 'admin-table__selection-hitbox',
       onClick: (event: MouseEvent) => event.stopPropagation(),
-    }),
-    render: (row: TicketRecord) => h(NCheckbox, {
-      checked: props.checkedTicketNos.includes(row.ticket_no),
-      onUpdateChecked: (checked: boolean) => emit('toggle-ticket-checked', {
-        ticketNo: row.ticket_no,
-        checked,
-        shiftKey: lastShiftKey,
+    }, [
+      h(NCheckbox, {
+        checked: isAllChecked.value,
+        indeterminate: isPartiallyChecked.value,
+        onUpdateChecked: (checked: boolean) => emit('toggle-all-tickets-checked', checked),
+        onClick: (event: MouseEvent) => event.stopPropagation(),
       }),
-      onClick: (event: MouseEvent) => {
-        lastShiftKey = event.shiftKey
-        event.stopPropagation()
-      },
-    }),
+    ]),
+    render: (row: TicketRecord) => h('div', {
+      class: 'admin-table__selection-hitbox',
+      onClick: (event: MouseEvent) => handleSelectionCellClick(row, event),
+    }, [
+      h(NCheckbox, {
+        checked: props.checkedTicketNos.includes(row.ticket_no),
+        onUpdateChecked: (checked: boolean) => emitTicketChecked(row.ticket_no, checked, lastShiftKey),
+        onClick: (event: MouseEvent) => {
+          lastShiftKey = event.shiftKey
+          event.stopPropagation()
+        },
+      }),
+    ]),
   },
   {
     key: 'ticket_no',
     title: t('admin.ticketIdCol'),
-    minWidth: 170,
+    minWidth: 156,
     ellipsis: true,
     render: (row: TicketRecord) => row.ticket_no,
   },
@@ -85,14 +105,14 @@ const columns = computed<UiDataTableColumns<TicketRecord>>(() => [
   {
     key: 'title',
     title: t('admin.titleCol'),
-    minWidth: 220,
+    minWidth: 196,
     ellipsis: { tooltip: true },
     render: (row: TicketRecord) => row.title,
   },
   {
     key: 'contact',
     title: t('admin.contactCol'),
-    minWidth: 160,
+    minWidth: 148,
     ellipsis: { tooltip: true },
     render: (row: TicketRecord) => row.contact || '--',
   },
@@ -119,13 +139,13 @@ const columns = computed<UiDataTableColumns<TicketRecord>>(() => [
   {
     key: 'created_at',
     title: t('admin.createdAtCol'),
-    width: 180,
+    width: 160,
     render: (row: TicketRecord) => row.created_at,
   },
   {
     key: 'updated_at',
     title: t('admin.updatedAtCol'),
-    width: 180,
+    width: 160,
     render: (row: TicketRecord) => row.updated_at,
   },
 ])
@@ -234,8 +254,13 @@ function createRowProps(row: TicketRecord) {
   width: 100%;
 }
 
-.admin-table-shell__body :deep(.n-data-table) {
-  min-width: 1120px;
+.admin-table__selection-hitbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 36px;
+  cursor: pointer;
 }
 
 .admin-pagination {
