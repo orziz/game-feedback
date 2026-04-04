@@ -62,6 +62,8 @@ abstract class AdminSubModule extends BaseApiSubModule
     }
 
     /**
+     * 校验 Bearer Token，并返回当前管理员信息。
+     *
      * @return array<string, mixed>
      */
     protected function ensureAdmin(): array
@@ -91,6 +93,8 @@ abstract class AdminSubModule extends BaseApiSubModule
     }
 
     /**
+     * 校验当前管理员是否具备超级管理员权限。
+     *
      * @return array<string, mixed>
      */
     protected function ensureSuperAdmin(): array
@@ -103,11 +107,17 @@ abstract class AdminSubModule extends BaseApiSubModule
         return $user;
     }
 
+    /**
+     * 读取用于令牌签名的应用密钥。
+     */
     protected function getAppSecret(): string
     {
         return (string)($this->dbConfig['app_secret'] ?? '');
     }
 
+    /**
+     * 基于默认下载域名生成七牛附件下载链接。
+     */
     protected function buildQiniuDownloadUrl(string $key, int $ttl = 600, bool $trimPadding = false): string
     {
         $domains = $this->resolveQiniuDownloadDomains();
@@ -118,6 +128,9 @@ abstract class AdminSubModule extends BaseApiSubModule
         return $this->buildQiniuDownloadUrlForDomain($domains[0], $key, $ttl, $trimPadding);
     }
 
+    /**
+     * 基于指定域名生成七牛附件下载链接。
+     */
     protected function buildQiniuDownloadUrlForDomain(string $domain, string $key, int $ttl = 600, bool $trimPadding = false): string
     {
         $baseUrl = $this->buildQiniuPublicUrlForDomain($domain, $key);
@@ -167,6 +180,9 @@ abstract class AdminSubModule extends BaseApiSubModule
         return $urls;
     }
 
+    /**
+     * 基于默认下载域名生成七牛公开访问链接。
+     */
     protected function buildQiniuPublicUrl(string $key): string
     {
         $domains = $this->resolveQiniuDownloadDomains();
@@ -177,6 +193,9 @@ abstract class AdminSubModule extends BaseApiSubModule
         return $this->buildQiniuPublicUrlForDomain($domains[0], $key);
     }
 
+    /**
+     * 基于指定域名生成七牛公开访问链接。
+     */
     protected function buildQiniuPublicUrlForDomain(string $domain, string $key): string
     {
         $normalizedDomain = trim($domain);
@@ -316,6 +335,9 @@ abstract class AdminSubModule extends BaseApiSubModule
         return array_values(array_unique($domains));
     }
 
+    /**
+     * 生成七牛管理接口请求所需的签名头。
+     */
     protected function buildQiniuManagementAuthorization(
         string $method,
         string $host,
@@ -350,6 +372,9 @@ abstract class AdminSubModule extends BaseApiSubModule
         return 'Qiniu ' . $accessKey . ':' . $this->base64UrlEncode($signature);
     }
 
+    /**
+     * 规范化七牛签名头中的自定义请求头名称。
+     */
     protected function canonicalizeQiniuHeaderName(string $name): string
     {
         $parts = preg_split('/-+/', trim($name)) ?: [];
@@ -385,6 +410,9 @@ abstract class AdminSubModule extends BaseApiSubModule
         ];
     }
 
+    /**
+     * 对七牛对象 key 做路径清洗与分段编码。
+     */
     protected function normalizeQiniuObjectKey(string $key): string
     {
         $trimmed = trim($key);
@@ -405,6 +433,9 @@ abstract class AdminSubModule extends BaseApiSubModule
         return implode('/', $encodedSegments);
     }
 
+    /**
+     * 判断域名是否属于七牛测试域名。
+     */
     protected function isQiniuTestDomain(string $domain): bool
     {
         $host = (string)(parse_url($domain, PHP_URL_HOST) ?: $domain);
@@ -417,6 +448,9 @@ abstract class AdminSubModule extends BaseApiSubModule
             || preg_match('/\.(hd-)?bkt\.clouddn\.net$/', $host) === 1;
     }
 
+    /**
+     * 当仅检测到七牛测试域名时，返回给管理员的配置提示。
+     */
     protected function getQiniuDownloadHint(): string
     {
         $domains = $this->resolveQiniuDownloadDomains();
@@ -471,6 +505,9 @@ abstract class AdminSubModule extends BaseApiSubModule
         return $options;
     }
 
+    /**
+     * 读取布尔型配置项，并兼容字符串形式的真值。
+     */
     protected function configFlag(string $key, bool $default): bool
     {
         if (!array_key_exists($key, $this->dbConfig)) {
@@ -490,6 +527,9 @@ abstract class AdminSubModule extends BaseApiSubModule
         return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
     }
 
+    /**
+     * 将配置中的相对路径解析为项目内绝对路径。
+     */
     protected function resolveConfigPath(string $key): string
     {
         $value = trim((string)($this->dbConfig[$key] ?? ''));
@@ -504,6 +544,9 @@ abstract class AdminSubModule extends BaseApiSubModule
         return dirname(__DIR__, 3) . '/' . ltrim(str_replace('\\', '/', $value), '/');
     }
 
+    /**
+     * 判断给定路径是否已经是绝对路径。
+     */
     protected function isAbsolutePath(string $path): bool
     {
         if ($path === '') {
@@ -517,6 +560,9 @@ abstract class AdminSubModule extends BaseApiSubModule
         return preg_match('/^[A-Za-z]:[\\\\\\/]/', $path) === 1;
     }
 
+    /**
+     * 执行 URL 安全的 Base64 编码，可选去掉填充字符。
+     */
     protected function base64UrlEncode(string $data, bool $trimPadding = false): string
     {
         $encoded = str_replace(['+', '/'], ['-', '_'], base64_encode($data));

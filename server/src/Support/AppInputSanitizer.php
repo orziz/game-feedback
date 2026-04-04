@@ -6,6 +6,9 @@ namespace GameFeedback\Support;
 
 final class AppInputSanitizer
 {
+    /**
+     * 清洗单行文本，移除控制字符并限制最大长度。
+     */
     public function sanitizeSingleLine(string $value, int $maxLength): string
     {
         $clean = str_replace("\0", '', $value);
@@ -19,6 +22,9 @@ final class AppInputSanitizer
         return $clean;
     }
 
+    /**
+     * 清洗多行文本，保留换行并限制最大长度。
+     */
     public function sanitizeText(string $value, int $maxLength): string
     {
         $clean = str_replace("\0", '', $value);
@@ -32,6 +38,9 @@ final class AppInputSanitizer
         return $clean;
     }
 
+    /**
+     * 计算字符串长度，优先按 UTF-8 字符数统计。
+     */
     public function stringLength(string $value): int
     {
         if (function_exists('mb_strlen')) {
@@ -41,6 +50,9 @@ final class AppInputSanitizer
         return strlen($value);
     }
 
+    /**
+     * 解析整数输入，并将结果钳制在给定范围内。
+     */
     public function parseInt(string $value, int $min, int $max): int
     {
         $number = filter_var($value, FILTER_VALIDATE_INT);
@@ -60,6 +72,9 @@ final class AppInputSanitizer
         return $number;
     }
 
+    /**
+     * 校验工单号是否符合系统约定格式。
+     */
     public function isValidTicketNo(string $ticketNo): bool
     {
         return preg_match('/^FB\d{8}[A-F0-9]{6}$/', $ticketNo) === 1;

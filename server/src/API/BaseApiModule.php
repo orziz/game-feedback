@@ -51,8 +51,14 @@ abstract class BaseApiModule
         $this->sanitizer = $sanitizer;
     }
 
+    /**
+     * 返回当前模块对应的子目录名。
+     */
     abstract protected function moduleDirName(): string;
 
+    /**
+     * 判断这个 action 最终能不能落到一个真实存在的方法上。
+     */
     public function hasAction(string $action): bool
     {
         $route = $this->parseAction($action);
@@ -65,6 +71,9 @@ abstract class BaseApiModule
         return $subModule !== null && $subModule->hasActionFunction($route['function']);
     }
 
+    /**
+     * 看看这个 action 是否允许当前请求方法访问。
+     */
     public function allowsMethod(string $action, string $method): bool
     {
         $route = $this->parseAction($action);
@@ -80,6 +89,9 @@ abstract class BaseApiModule
         return $subModule->allowsMethod($route['function'], $method);
     }
 
+    /**
+     * 看看这个 action 在安装前能不能提前访问。
+     */
     public function allowsBeforeInstall(string $action): bool
     {
         $route = $this->parseAction($action);
@@ -95,6 +107,9 @@ abstract class BaseApiModule
         return $subModule->allowsBeforeInstall($route['function']);
     }
 
+    /**
+     * 把 action 真正分发到对应子模块并执行。
+     */
     public function dispatch(string $action): void
     {
         $route = $this->parseAction($action);
@@ -125,6 +140,9 @@ abstract class BaseApiModule
         ];
     }
 
+    /**
+     * 找到并缓存子模块实例，后面同一次请求可直接复用。
+     */
     private function resolveSubModule(string $subModuleName): ?BaseApiSubModule
     {
         if (isset($this->subModules[$subModuleName])) {

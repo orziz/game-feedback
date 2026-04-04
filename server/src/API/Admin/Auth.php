@@ -31,6 +31,9 @@ final class Auth extends AdminSubModule
         ];
     }
 
+    /**
+     * 校验管理员账号密码并签发登录令牌。
+     */
     protected function login(): void
     {
         $payload = Request::jsonBody();
@@ -65,6 +68,9 @@ final class Auth extends AdminSubModule
         ]);
     }
 
+    /**
+     * 返回当前登录管理员的基本信息。
+     */
     protected function currentUser(): void
     {
         $user = $this->currentAdminUser();

@@ -71,6 +71,10 @@ docker compose up -d --build
 - `APP_TIMEZONE`：运行时时区覆盖
 - `APP_UPLOAD_MODE`：附件模式，支持 `off/local/qiniu`
 - `APP_UPLOAD_MAX_BYTES`：业务层附件大小限制，单位字节
+- `APP_ATTACHMENT_CLEANUP_ENABLED`：是否启用附件自动/手动清理，支持 `true/false`
+- `APP_ATTACHMENT_CLEANUP_RETENTION_DAYS`：已解决/已关闭工单附件的保留天数（天）
+- `APP_ATTACHMENT_CLEANUP_INTERVAL_SECONDS`：自动清理检查间隔（秒）
+- `APP_ATTACHMENT_CLEANUP_BATCH_LIMIT`：单次自动清理上限（条）
 - `APP_QINIU_ACCESS_KEY` / `APP_QINIU_SECRET_KEY` / `APP_QINIU_BUCKET` / `APP_QINIU_DOMAIN`
 - `APP_QINIU_DOWNLOAD_DOMAIN`：可选下载域名覆盖
 - `APP_QINIU_DIRECT_ACCESS`：是否直连七牛，支持 `true/false`
@@ -194,6 +198,7 @@ php -S 127.0.0.1:8000 router.php
 - 系统启动时自动检测版本差异
 - 仅在需要升级时执行迁移脚本
 - 成功后自动更新版本号
+- 系统启动时还会按节流策略顺带执行一次附件清理检查（默认 10 分钟最多触发一次，单次最多处理 100 条，可通过配置覆盖）
 
 **推荐升级流程**：
 1. 备份数据库
@@ -202,6 +207,26 @@ php -S 127.0.0.1:8000 router.php
 4. 访问前端页面触发迁移
 5. 检查版本是否更新
 6. 测试提交、查询和后台功能
+
+### 手动执行附件清理
+
+如果待清理附件很多，除了系统自动检查外，也可以在后台手动执行：
+
+1. 使用**超级管理员**登录后台
+2. 打开“附件清理”页签
+3. 先确认以下配置是否正确：
+   - 是否启用清理
+   - 附件保留时长（天）
+   - 自动清理检查间隔（秒）
+   - 单次自动清理上限（条）
+4. 点击“立即执行清理”
+
+说明：
+- 支持清理本地存储和七牛云附件
+- 只会清理已解决 / 已关闭且超过保留天数的附件
+- 若已禁用附件清理，手动执行也会被阻止
+- 若积压很多，可多次手动执行推进清理
+- 自动清理的触发间隔和单次批量上限可通过环境变量或 `server/config/database.php` 配置
 
 ## ❓ 常见问题
 

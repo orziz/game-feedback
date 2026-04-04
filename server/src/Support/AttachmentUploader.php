@@ -130,6 +130,9 @@ final class AttachmentUploader
         Responder::error('UNSUPPORTED_STORAGE', 'Unsupported attachment storage mode.', 500);
     }
 
+    /**
+     * 将附件保存到本地 uploads 目录并返回相对路径。
+     */
     private function storeLocalAttachment(string $tmpName, string $extension): string
     {
         $datePath = date('Y/m');
@@ -147,6 +150,9 @@ final class AttachmentUploader
         return $datePath . '/' . $fileName;
     }
 
+    /**
+     * 将附件上传到七牛云并返回对象 key。
+     */
     private function storeQiniuAttachment(string $tmpName, string $extension, string $mime): string
     {
         $accessKey = trim((string)($this->dbConfig['qiniu_access_key'] ?? ''));
@@ -208,6 +214,9 @@ final class AttachmentUploader
         return $key;
     }
 
+    /**
+     * 根据上传策略生成七牛上传凭证。
+     */
     private function buildQiniuUploadToken(string $accessKey, string $secretKey, string $scope, int $deadline): string
     {
         $policy = [
@@ -379,6 +388,9 @@ final class AttachmentUploader
         return $options;
     }
 
+    /**
+     * 构造更适合展示给用户的 cURL 错误信息。
+     */
     private function buildCurlErrorMessage(string $curlError, int $curlErrno): string
     {
         if ($curlErrno !== 60) {
@@ -406,6 +418,9 @@ final class AttachmentUploader
         return implode(' ', $tips);
     }
 
+    /**
+     * 读取布尔型配置项，并兼容字符串形式的真值。
+     */
     private function configFlag(string $key, bool $default): bool
     {
         if (!array_key_exists($key, $this->dbConfig)) {
@@ -425,6 +440,9 @@ final class AttachmentUploader
         return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
     }
 
+    /**
+     * 将配置中的相对路径解析为项目内绝对路径。
+     */
     private function resolveConfigPath(string $key): string
     {
         $value = trim((string)($this->dbConfig[$key] ?? ''));
@@ -439,6 +457,9 @@ final class AttachmentUploader
         return dirname(__DIR__, 2) . '/' . ltrim(str_replace('\\', '/', $value), '/');
     }
 
+    /**
+     * 判断给定路径是否已经是绝对路径。
+     */
     private function isAbsolutePath(string $path): bool
     {
         if ($path === '') {
@@ -452,11 +473,17 @@ final class AttachmentUploader
         return preg_match('/^[A-Za-z]:[\\\\\\/]/', $path) === 1;
     }
 
+    /**
+     * 执行 URL 安全的 Base64 编码。
+     */
     private function base64UrlEncode(string $data): string
     {
         return str_replace(['+', '/'], ['-', '_'], base64_encode($data));
     }
 
+    /**
+     * 清洗单行输入，供附件相关配置和文件名复用。
+     */
     private function sanitizeSingleLine(string $value, int $maxLength): string
     {
         $clean = str_replace("\0", '', $value);
@@ -470,6 +497,9 @@ final class AttachmentUploader
         return $clean;
     }
 
+    /**
+     * 计算字符串长度，优先按 UTF-8 字符数统计。
+     */
     private function stringLength(string $value): int
     {
         if (function_exists('mb_strlen')) {

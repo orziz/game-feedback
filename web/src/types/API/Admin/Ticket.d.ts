@@ -6,6 +6,7 @@ declare namespace API.Admin.Ticket {
       detail: API.Meta.Get<HttpParams.Detail, AdminDetailResponse>
       getOperations: API.Meta.Get<HttpParams.GetOperations, AdminOperationsResponse>
       attachmentUrl: API.Meta.Get<HttpParams.AttachmentUrl, AttachmentUrlResponse>
+      cleanupConfig: API.Meta.Get<void, CleanupConfigResponse>
     }
     getBlob: {
       attachmentDownload: API.Meta.GetBlob<HttpParams.AttachmentDownload>
@@ -14,6 +15,8 @@ declare namespace API.Admin.Ticket {
       update: API.Meta.Post<HttpParams.Update, ApiResponseBase>
       assign: API.Meta.Post<HttpParams.Assign, ApiResponseBase>
       batchAssign: API.Meta.Post<HttpParams.BatchAssign, BatchAssignResponse>
+      updateCleanupConfig: API.Meta.Post<HttpParams.UpdateCleanupConfig, CleanupConfigResponse>
+      cleanupAttachments: API.Meta.Post<void, CleanupRunResponse>
     }
   }
 
@@ -60,6 +63,13 @@ declare namespace API.Admin.Ticket {
     interface AttachmentUrl {
       ticketNo: string
     }
+
+    interface UpdateCleanupConfig {
+      enabled: boolean
+      retentionDays: number
+      intervalSeconds: number
+      batchLimit: number
+    }
   }
 }
 
@@ -73,6 +83,7 @@ interface TicketRecord {
   status: TicketStatus
   admin_note: string
   assigned_to?: number | null
+  assigned_username?: string | null
   attachment_name?: string | null
   attachment_storage?: string | null
   attachment_mime?: string | null
@@ -128,4 +139,27 @@ interface AttachmentUrlResponse extends ApiResponseBase {
 
 interface BatchAssignResponse extends ApiResponseBase {
   affected: number
+}
+
+interface CleanupConfigResponse extends ApiResponseBase {
+  enabled: boolean
+  retentionDays: number
+  intervalSeconds: number
+  batchLimit: number
+}
+
+interface CleanupRunResult {
+  enabled: boolean
+  retentionDays: number
+  scanned: number
+  deleted: number
+  alreadyMissing: number
+  errors: Array<{
+    ticketNo: string
+    message: string
+  }>
+}
+
+interface CleanupRunResponse extends ApiResponseBase {
+  result: CleanupRunResult
 }

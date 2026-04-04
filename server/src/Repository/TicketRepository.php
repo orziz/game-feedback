@@ -49,6 +49,8 @@ CREATE TABLE IF NOT EXISTS feedback_tickets (
     attachment_key VARCHAR(255) NULL,
     attachment_mime VARCHAR(80) NULL,
     attachment_size INT UNSIGNED NULL,
+    attachment_cleanup_due_at DATETIME NULL,
+    attachment_deleted_at DATETIME NULL,
     assigned_to BIGINT UNSIGNED NULL,
     status TINYINT UNSIGNED NOT NULL DEFAULT 0,
     admin_note TEXT NULL,
@@ -57,6 +59,7 @@ CREATE TABLE IF NOT EXISTS feedback_tickets (
     updated_at DATETIME NOT NULL,
     INDEX idx_type_title (type, title),
     INDEX idx_status_created (status, created_at),
+    INDEX idx_attachment_cleanup_due_at (attachment_cleanup_due_at, attachment_deleted_at),
     INDEX idx_assigned_to (assigned_to),
     INDEX idx_content_hash (content_hash)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -244,7 +247,7 @@ SQL;
         $total = (int)$countStmt->fetchColumn();
 
         $offset = ($page - 1) * $pageSize;
-        $sql = 'SELECT t.ticket_no, t.type, t.severity, t.title, t.contact, t.status, t.assigned_to, COALESCE(u.username, \'\') as assigned_username, t.created_at, t.updated_at' . $baseSql . ' ORDER BY t.created_at DESC LIMIT :limit OFFSET :offset';
+        $sql = 'SELECT t.ticket_no, t.type, t.severity, t.title, t.contact, t.status, t.admin_note, t.assigned_to, COALESCE(u.username, \'\') as assigned_username, t.attachment_name, t.created_at, t.updated_at' . $baseSql . ' ORDER BY t.created_at DESC LIMIT :limit OFFSET :offset';
 
         $stmt = $this->pdo->prepare($sql);
         foreach ($params as $key => $value) {
@@ -339,6 +342,89 @@ SQL;
             ':updated_at' => $updatedAt,
             ':ticket_no' => $ticketNo,
         ]);
+    }
+
+    /**
+     * 设置或清空工单附件的清理到期时间。
+     */
+    public function updateAttachmentCleanupSchedule(string $ticketNo, ?string $dueAt): void
+    {
+        $stmt = $this->pdo->prepare(
+            'UPDATE feedback_tickets SET attachment_cleanup_due_at = :attachment_cleanup_due_at WHERE ticket_no = :ticket_no'
+        );
+        $stmt->bindValue(':ticket_no', $ticketNo);
+        if ($dueAt === null) {
+            $stmt->bindValue(':attachment_cleanup_due_at', null, PDO::PARAM_NULL);
+        } else {
+            $stmt->bindValue(':attachment_cleanup_due_at', $dueAt);
+        }
+        $stmt->execute();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function findAttachmentCleanupCandidates(string $now, int $limit = 20): array
+    {
+        $safeLimit = max(1, min(500, $limit));
+        $stmt = $this->pdo->prepare(
+            'SELECT ticket_no, attachment_storage, attachment_key, attachment_name ' .
+            'FROM feedback_tickets ' .
+            'WHERE attachment_storage IS NOT NULL ' .
+            'AND attachment_key IS NOT NULL ' .
+            'AND attachment_deleted_at IS NULL ' .
+            'AND attachment_cleanup_due_at IS NOT NULL ' .
+            'AND attachment_cleanup_due_at <= :now ' .
+            'ORDER BY attachment_cleanup_due_at ASC ' .
+            'LIMIT :limit'
+        );
+        $stmt->bindValue(':now', $now);
+        $stmt->bindValue(':limit', $safeLimit, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * 在附件清理完成后清空附件字段并记录删除时间。
+     */
+    public function clearAttachmentAfterCleanup(string $ticketNo, string $deletedAt): void
+    {
+        $stmt = $this->pdo->prepare(
+            'UPDATE feedback_tickets SET ' .
+            'attachment_name = NULL, ' .
+            'attachment_storage = NULL, ' .
+            'attachment_key = NULL, ' .
+            'attachment_mime = NULL, ' .
+            'attachment_size = NULL, ' .
+            'attachment_cleanup_due_at = NULL, ' .
+            'attachment_deleted_at = :attachment_deleted_at, ' .
+            'updated_at = :updated_at ' .
+            'WHERE ticket_no = :ticket_no'
+        );
+        $stmt->execute([
+            ':attachment_deleted_at' => $deletedAt,
+            ':updated_at' => $deletedAt,
+            ':ticket_no' => $ticketNo,
+        ]);
+    }
+
+    /**
+     * 为历史已结单但尚未排程的附件补写清理时间。
+     */
+    public function backfillAttachmentCleanupDueAt(int $retentionDays): int
+    {
+        $safeDays = max(1, $retentionDays);
+        $stmt = $this->pdo->prepare(
+            'UPDATE feedback_tickets SET attachment_cleanup_due_at = DATE_ADD(updated_at, INTERVAL :retention_days DAY) ' .
+            'WHERE status IN (2, 3) ' .
+            'AND attachment_storage IS NOT NULL ' .
+            'AND attachment_key IS NOT NULL ' .
+            'AND attachment_deleted_at IS NULL ' .
+            'AND attachment_cleanup_due_at IS NULL'
+        );
+        $stmt->bindValue(':retention_days', $safeDays, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->rowCount();
     }
 
     /**

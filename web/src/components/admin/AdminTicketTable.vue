@@ -22,6 +22,7 @@ const emit = defineEmits<{
   'toggle-ticket-checked': [payload: { ticketNo: string; checked: boolean; shiftKey: boolean }]
   'toggle-all-tickets-checked': [checked: boolean]
   'batch-assign': []
+  'export-current-page': []
 }>()
 
 const { t } = useI18n()
@@ -132,7 +133,7 @@ const columns = computed<UiDataTableColumns<TicketRecord>>(() => [
           default: () => t('common.unassigned'),
         })
       }
-      const assignedUsername = (row as TicketRecord & { assigned_username?: string | null }).assigned_username
+      const assignedUsername = row.assigned_username
       return h(NTag, {
         size: 'small',
         round: true,
@@ -181,6 +182,9 @@ function createRowProps(row: TicketRecord) {
       </div>
       <div class="admin-table-shell__actions">
         <p class="admin-table-shell__caption">{{ t('admin.queueDescription') }}</p>
+        <n-button size="small" :disabled="loading || tickets.length === 0" @click="emit('export-current-page')">
+          {{ t('admin.exportCurrentPage') }}
+        </n-button>
         <n-button size="small" type="primary" secondary :disabled="!canBatchAssign" @click="emit('batch-assign')">
           {{ t('admin.batchAssignButton', { count: checkedTicketNos.length }) }}
         </n-button>
@@ -210,7 +214,7 @@ function createRowProps(row: TicketRecord) {
         :page="page"
         :page-size="pageSize"
         :item-count="total"
-        :page-sizes="[10, 20, 50, 100]"
+        :page-sizes="[10, 20, 50, 100, 300, 500]"
         show-size-picker
         @update:page="(value: number) => emit('page-change', value)"
         @update:page-size="(value: number) => emit('page-size-change', value)"

@@ -121,6 +121,11 @@ final class Database
         $qiniuUploadHost  = $v('qiniu_upload_host');
         $qiniuConnTimeout = self::exportValue((int)($config['qiniu_connect_timeout'] ?? 0));
         $qiniuUpTimeout   = self::exportValue((int)($config['qiniu_upload_timeout'] ?? 0));
+        $attachmentCleanupEnabled = $v('attachment_cleanup_enabled', true);
+        $attachmentCleanupRetentionDays = self::exportValue((int)($config['attachment_cleanup_retention_days'] ?? 15));
+        $attachmentCleanupIntervalSeconds = self::exportValue((int)($config['attachment_cleanup_interval_seconds'] ?? 600));
+        $attachmentCleanupBatchLimit = self::exportValue((int)($config['attachment_cleanup_batch_limit'] ?? 100));
+        $attachmentExportLinkTtlSeconds = self::exportValue((int)($config['attachment_export_link_ttl_seconds'] ?? 604800));
         $curlVerifySsl    = $v('curl_verify_ssl', true);
         $curlUseNativeCa  = $v('curl_use_native_ca', true);
         $curlCaFile       = $v('curl_ca_file');
@@ -138,6 +143,9 @@ final class Database
         $knownKeys = [
             'host', 'port', 'database', 'username', 'password', 'app_secret',
             'upload_mode', 'upload_max_bytes',
+            'attachment_cleanup_enabled', 'attachment_cleanup_retention_days',
+            'attachment_cleanup_interval_seconds', 'attachment_cleanup_batch_limit',
+            'attachment_export_link_ttl_seconds',
             'qiniu_access_key', 'qiniu_secret_key', 'qiniu_bucket',
             'qiniu_domain', 'qiniu_download_domain', 'qiniu_direct_access',
             'qiniu_upload_host', 'qiniu_connect_timeout', 'qiniu_upload_timeout',
@@ -181,6 +189,18 @@ return [
     // 附件最大大小（字节），默认 5 MB = 5242880
     // Maximum attachment size in bytes; default 5 MB = 5242880
     'upload_max_bytes' => {$uploadMaxBytes},
+    // 附件自动清理：true=启用 | false=禁用
+    // Attachment cleanup: true=enabled | false=disabled
+    'attachment_cleanup_enabled' => {$attachmentCleanupEnabled},
+    // 已解决/已关闭工单的附件保留天数，默认 15 天
+    // Retention period in days for attachments on resolved/closed tickets; default 15 days
+    'attachment_cleanup_retention_days' => {$attachmentCleanupRetentionDays},
+    // 自动清理触发间隔（秒），默认 600 秒
+    // Automatic cleanup trigger interval in seconds; default 600 seconds
+    'attachment_cleanup_interval_seconds' => {$attachmentCleanupIntervalSeconds},
+    // 单条导出附件直链的有效期（秒），默认 604800 秒（7 天）
+    // Exported attachment direct-link TTL in seconds; default 604800 seconds (7 days)
+    'attachment_export_link_ttl_seconds' => {$attachmentExportLinkTtlSeconds},
 
     // ── 七牛云 / Qiniu Cloud ───────────────────────────────────────────────────────
     // upload_mode=qiniu 时必填 / Required when upload_mode=qiniu

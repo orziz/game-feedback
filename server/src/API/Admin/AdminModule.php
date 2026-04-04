@@ -12,6 +12,9 @@ use GameFeedback\API\BaseApiModule;
  */
 final class AdminModule extends BaseApiModule
 {
+    /**
+     * 返回管理端子模块所在目录名。
+     */
     protected function moduleDirName(): string
     {
         return 'Admin';

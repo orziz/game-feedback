@@ -39,6 +39,9 @@ final class User extends AdminSubModule
         ];
     }
 
+    /**
+     * 获取后台管理员用户列表。
+     */
     protected function list(): void
     {
         Responder::send([
@@ -47,6 +50,9 @@ final class User extends AdminSubModule
         ]);
     }
 
+    /**
+     * 创建新的后台管理员账号。
+     */
     protected function create(): void
     {
         $payload = Request::jsonBody();
@@ -83,6 +89,9 @@ final class User extends AdminSubModule
         ]);
     }
 
+    /**
+     * 删除指定的后台管理员账号。
+     */
     protected function delete(): void
     {
         $payload = Request::jsonBody();
@@ -103,6 +112,9 @@ final class User extends AdminSubModule
         ]);
     }
 
+    /**
+     * 重置指定管理员的登录密码。
+     */
     protected function resetPassword(): void
     {
         $payload = Request::jsonBody();

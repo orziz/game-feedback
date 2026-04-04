@@ -12,6 +12,9 @@ use GameFeedback\API\BaseApiModule;
  */
 final class SystemModule extends BaseApiModule
 {
+    /**
+     * 返回系统子模块所在目录名。
+     */
     protected function moduleDirName(): string
     {
         return 'System';

@@ -18,6 +18,9 @@ final class SystemInstaller
     /** @var AppInputSanitizer */
     private $sanitizer;
 
+    /**
+     * @param string $databaseConfigPath 安装完成后写入的数据库配置文件路径
+     */
     public function __construct(string $databaseConfigPath, AppInputSanitizer $sanitizer)
     {
         $this->databaseConfigPath = $databaseConfigPath;
@@ -116,6 +119,11 @@ final class SystemInstaller
             'qiniu_upload_host' => '',
             'qiniu_connect_timeout' => 0,
             'qiniu_upload_timeout' => 0,
+            'attachment_cleanup_enabled' => true,
+            'attachment_cleanup_retention_days' => 15,
+            'attachment_cleanup_interval_seconds' => 600,
+            'attachment_cleanup_batch_limit' => 100,
+            'attachment_export_link_ttl_seconds' => 604800,
             'curl_verify_ssl' => $curlVerifySsl,
             'curl_use_native_ca' => $curlUseNativeCa,
             'curl_ca_file' => $curlCaFile,
@@ -132,6 +140,9 @@ final class SystemInstaller
         ]);
     }
 
+    /**
+     * 将安装请求中的布尔值输入规范化为真正的布尔类型。
+     */
     private function normalizeBool($value): bool
     {
         if (is_bool($value)) {

@@ -29,6 +29,9 @@ final class Setup extends BaseApiSubModule
         ];
     }
 
+    /**
+     * 返回前端安装页面需要的枚举选项。
+     */
     protected function enumOptions(): void
     {
         $lang = Request::query('lang', 'zh-CN');
@@ -42,6 +45,9 @@ final class Setup extends BaseApiSubModule
         ]);
     }
 
+    /**
+     * 执行系统首次安装并写入数据库配置。
+     */
     protected function install(): void
     {
         if ($this->installed || is_file($this->databaseConfigPath)) {

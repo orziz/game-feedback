@@ -7,6 +7,8 @@ namespace GameFeedback\API\Admin;
 use GameFeedback\Enums\TicketSeverity;
 use GameFeedback\Enums\TicketStatus;
 use GameFeedback\Enums\TicketType;
+use GameFeedback\Support\AttachmentCleanupService;
+use GameFeedback\Support\Database;
 use GameFeedback\Support\Request;
 use GameFeedback\Support\Responder;
 
@@ -38,6 +40,10 @@ final class Ticket extends AdminSubModule
                 self::META_METHODS => ['GET'],
                 self::META_AUTH => self::AUTH_ADMIN,
             ],
+            'publicAttachmentDownload' => [
+                self::META_METHODS => ['GET'],
+                self::META_AUTH => self::AUTH_NONE,
+            ],
             'update' => [
                 self::META_METHODS => ['POST'],
                 self::META_AUTH => self::AUTH_ADMIN,
@@ -58,9 +64,24 @@ final class Ticket extends AdminSubModule
                 self::META_METHODS => ['GET'],
                 self::META_AUTH => self::AUTH_ADMIN,
             ],
+            'cleanupConfig' => [
+                self::META_METHODS => ['GET'],
+                self::META_AUTH => self::AUTH_SUPER_ADMIN,
+            ],
+            'updateCleanupConfig' => [
+                self::META_METHODS => ['POST'],
+                self::META_AUTH => self::AUTH_SUPER_ADMIN,
+            ],
+            'cleanupAttachments' => [
+                self::META_METHODS => ['POST'],
+                self::META_AUTH => self::AUTH_SUPER_ADMIN,
+            ],
         ];
     }
 
+    /**
+     * 按筛选条件分页返回后台工单列表。
+     */
     protected function list(): void
     {
         $statusRaw = Request::query('status');
@@ -96,6 +117,9 @@ final class Ticket extends AdminSubModule
         ]);
     }
 
+    /**
+     * 返回指定工单的详情和操作记录。
+     */
     protected function detail(): void
     {
         $ticketNo = $this->sanitizer->sanitizeSingleLine(Request::query('ticketNo'), 32);
@@ -118,6 +142,9 @@ final class Ticket extends AdminSubModule
         ]);
     }
 
+    /**
+     * 获取可用于工单指派的管理员列表。
+     */
     protected function assignees(): void
     {
         Responder::send([
@@ -126,6 +153,9 @@ final class Ticket extends AdminSubModule
         ]);
     }
 
+    /**
+     * 更新工单状态、严重程度和后台备注。
+     */
     protected function update(): void
     {
         $currentUser = $this->currentAdminUser();
@@ -169,6 +199,9 @@ final class Ticket extends AdminSubModule
             $updatedAt
         );
 
+        $cleanupService = $this->createAttachmentCleanupService();
+        $cleanupService->syncTicketSchedule($ticket, (int)$status, $updatedAt);
+
         // 记录状态变更
         $oldStatus = (int)($ticket['status'] ?? 0);
         $newStatusValue = (int)$status;
@@ -189,6 +222,9 @@ final class Ticket extends AdminSubModule
         ]);
     }
 
+    /**
+     * 代理下载指定工单的附件内容。
+     */
     protected function attachmentDownload(): void
     {
         $ticketNo = $this->sanitizer->sanitizeSingleLine(Request::query('ticketNo'), 32);
@@ -201,6 +237,45 @@ final class Ticket extends AdminSubModule
             Responder::error('TICKET_NOT_FOUND', '工单不存在。', 404);
         }
 
+        $this->streamTicketAttachment($ticket);
+    }
+
+    /**
+     * 通过签名链接直接下载指定工单附件。
+     */
+    protected function publicAttachmentDownload(): void
+    {
+        $ticketNo = $this->sanitizer->sanitizeSingleLine(Request::query('ticketNo'), 32);
+        $expires = $this->sanitizer->parseInt(Request::query('expires', '0'), 0, 2147483647);
+        $signature = $this->sanitizer->sanitizeSingleLine(Request::query('signature'), 128);
+
+        if ($ticketNo === '' || !$this->sanitizer->isValidTicketNo($ticketNo)) {
+            Responder::error('INVALID_TICKET_NO', '工单号格式不正确。', 422);
+        }
+
+        if ($expires <= time()) {
+            Responder::error('LINK_EXPIRED', '附件链接已过期。', 410);
+        }
+
+        if (!$this->isValidPublicAttachmentSignature($ticketNo, $expires, $signature)) {
+            Responder::error('INVALID_SIGNATURE', '附件链接签名无效。', 403);
+        }
+
+        $ticket = $this->createTicketRepository()->findTicketByNo($ticketNo);
+        if (!$ticket) {
+            Responder::error('TICKET_NOT_FOUND', '工单不存在。', 404);
+        }
+
+        $this->streamTicketAttachment($ticket);
+    }
+
+    /**
+     * 按工单记录输出附件内容。
+     *
+     * @param array<string, mixed> $ticket
+     */
+    private function streamTicketAttachment(array $ticket): void
+    {
         $attachmentKey = (string)($ticket['attachment_key'] ?? '');
         $attachmentStorage = (string)($ticket['attachment_storage'] ?? '');
         $attachmentName = (string)($ticket['attachment_name'] ?? '');
@@ -307,7 +382,6 @@ final class Ticket extends AdminSubModule
                 Responder::error('QINIU_DOWNLOAD_FAILED', $message, 500);
             }
 
-            // 下载成功后再输出附件响应头，避免失败时污染错误 JSON 响应
             header('Content-Type: ' . $attachmentMime);
             header('Content-Disposition: attachment; filename="' . rawurlencode($attachmentName) . '"; filename*=UTF-8\'\'' . rawurlencode($attachmentName));
             $stat = fstat($downloadedStream);
@@ -324,6 +398,9 @@ final class Ticket extends AdminSubModule
         Responder::error('UNSUPPORTED_STORAGE', '不支持的附件存储方式。', 500);
     }
 
+    /**
+     * 代理下载指定工单的附件内容。
+     */
     protected function assign(): void
     {
         $currentUser = $this->currentAdminUser();
@@ -394,6 +471,11 @@ final class Ticket extends AdminSubModule
         ]);
     }
 
+    /**
+     * 返回附件可直接下载的地址。
+     *
+     * 优先返回七牛直链；否则返回带签名的公开下载地址。
+     */
     protected function attachmentUrl(): void
     {
         $ticketNo = $this->sanitizer->sanitizeSingleLine(Request::query('ticketNo'), 32);
@@ -414,10 +496,10 @@ final class Ticket extends AdminSubModule
             Responder::error('ATTACHMENT_NOT_FOUND', '该工单没有附件。', 404);
         }
 
-        // 仅当 storage=qiniu 且配置启用了 qiniu_direct_access 时，才返回直连 URL
         $directAccess = $this->resolveConfigFlag('qiniu_direct_access', false);
+        $linkTtl = $this->attachmentExportLinkTtlSeconds();
         if ($directAccess && $attachmentStorage === 'qiniu') {
-            $url = $this->buildQiniuDownloadUrl($attachmentKey, 600);
+            $url = $this->buildQiniuDownloadUrl($attachmentKey, $linkTtl);
             if ($url !== '') {
                 Responder::send([
                     'ok'   => true,
@@ -428,10 +510,16 @@ final class Ticket extends AdminSubModule
             }
         }
 
-        // 本地存储或未开启直连：让前端走代理下载
-        Responder::send(['ok' => true, 'mode' => 'proxy']);
+        Responder::send([
+            'ok' => true,
+            'mode' => 'direct',
+            'url' => $this->buildPublicAttachmentDownloadUrl($ticketNo, $linkTtl),
+        ]);
     }
 
+    /**
+     * 批量将多条工单指派给指定管理员。
+     */
     protected function batchAssign(): void
     {
         $currentUser = $this->currentAdminUser();
@@ -515,6 +603,113 @@ final class Ticket extends AdminSubModule
         ]);
     }
 
+    /**
+     * 读取当前附件清理配置。
+     */
+    protected function cleanupConfig(): void
+    {
+        $cleanupService = $this->createAttachmentCleanupService();
+        Responder::send([
+            'ok' => true,
+            'enabled' => $cleanupService->isEnabled(),
+            'retentionDays' => $cleanupService->retentionDays(),
+            'intervalSeconds' => $this->cleanupIntervalSeconds(),
+            'batchLimit' => $this->cleanupBatchLimit(),
+        ]);
+    }
+
+    /**
+     * 更新附件清理开关、保留时长和执行参数。
+     */
+    protected function updateCleanupConfig(): void
+    {
+        $payload = Request::jsonBody();
+        $enabled = $this->normalizeCleanupEnabled($payload['enabled'] ?? true);
+        $retentionDays = $this->sanitizer->parseInt((string)($payload['retentionDays'] ?? 15), 1, 3650);
+        $intervalSeconds = $this->sanitizer->parseInt((string)($payload['intervalSeconds'] ?? 600), 1, 86400);
+        $batchLimit = $this->sanitizer->parseInt((string)($payload['batchLimit'] ?? 100), 1, 10000);
+
+        $nextConfig = $this->dbConfig;
+        $nextConfig['attachment_cleanup_enabled'] = $enabled;
+        $nextConfig['attachment_cleanup_retention_days'] = $retentionDays;
+        $nextConfig['attachment_cleanup_interval_seconds'] = $intervalSeconds;
+        $nextConfig['attachment_cleanup_batch_limit'] = $batchLimit;
+        $nextConfig['schema_version'] = max((int)($nextConfig['schema_version'] ?? 0), 6);
+        Database::writeConfig($this->databaseConfigPath, $nextConfig);
+        $this->dbConfig = $nextConfig;
+
+        Responder::send([
+            'ok' => true,
+            'enabled' => $enabled,
+            'retentionDays' => $retentionDays,
+            'intervalSeconds' => $intervalSeconds,
+            'batchLimit' => $batchLimit,
+            'message' => '附件清理配置已更新。',
+        ]);
+    }
+
+    /**
+     * 立即执行一次附件清理任务。
+     */
+    protected function cleanupAttachments(): void
+    {
+        $cleanupService = $this->createAttachmentCleanupService();
+        $result = $cleanupService->run(100, false);
+        if (!$result['enabled']) {
+            Responder::error('ATTACHMENT_CLEANUP_DISABLED', '附件清理当前已禁用。', 409);
+        }
+
+        Responder::send([
+            'ok' => true,
+            'message' => '附件清理执行完成。',
+            'result' => $result,
+        ]);
+    }
+
+    /**
+     * 生成导出用的公开附件下载地址。
+     */
+    private function buildPublicAttachmentDownloadUrl(string $ticketNo, int $ttl): string
+    {
+        $expires = time() + max(60, $ttl);
+        $signature = hash_hmac('sha256', $ticketNo . '|' . $expires, $this->getAppSecret());
+        $query = http_build_query([
+            's' => 'admin/Ticket/publicAttachmentDownload',
+            'ticketNo' => $ticketNo,
+            'expires' => $expires,
+            'signature' => $signature,
+        ]);
+
+        $requestScheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $requestHost = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
+        $requestPath = parse_url((string)($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
+        $basePath = is_string($requestPath) && trim($requestPath) !== ''
+            ? $requestPath
+            : ((string)($_SERVER['SCRIPT_NAME'] ?? '/api'));
+
+        if ($requestHost !== '') {
+            return $requestScheme . '://' . $requestHost . $basePath . '?' . $query;
+        }
+
+        return $basePath . '?' . $query;
+    }
+
+    /**
+     * 校验公开附件下载链接签名。
+     */
+    private function isValidPublicAttachmentSignature(string $ticketNo, int $expires, string $signature): bool
+    {
+        if ($signature === '') {
+            return false;
+        }
+
+        $expected = hash_hmac('sha256', $ticketNo . '|' . $expires, $this->getAppSecret());
+        return hash_equals($expected, $signature);
+    }
+
+    /**
+     * 读取布尔型配置项，并兼容字符串形式的真值。
+     */
     private function resolveConfigFlag(string $key, bool $default): bool
     {
         if (!array_key_exists($key, $this->dbConfig)) {
@@ -531,6 +726,61 @@ final class Ticket extends AdminSubModule
         return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
     }
 
+    /**
+     * 将附件清理开关输入规范化为布尔值。
+     */
+    private function normalizeCleanupEnabled($value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        $normalized = strtolower(trim((string)$value));
+        if ($normalized === '') {
+            return false;
+        }
+
+        return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
+    }
+
+    /**
+     * 获取附件清理任务的最小执行间隔。
+     */
+    private function cleanupIntervalSeconds(): int
+    {
+        $value = (int)($this->dbConfig['attachment_cleanup_interval_seconds'] ?? 600);
+        return $value > 0 ? $value : 600;
+    }
+
+    /**
+     * 获取单次附件清理任务的批处理上限。
+     */
+    private function cleanupBatchLimit(): int
+    {
+        $value = (int)($this->dbConfig['attachment_cleanup_batch_limit'] ?? 100);
+        return $value > 0 ? $value : 100;
+    }
+
+    /**
+     * 获取导出附件直链的有效期（秒）。
+     */
+    private function attachmentExportLinkTtlSeconds(): int
+    {
+        $value = (int)($this->dbConfig['attachment_export_link_ttl_seconds'] ?? 604800);
+        return $value > 0 ? $value : 604800;
+    }
+
+    /**
+     * 创建附件清理服务实例。
+     */
+    private function createAttachmentCleanupService(): AttachmentCleanupService
+    {
+        return new AttachmentCleanupService($this->dbConfig, $this->getPdo());
+    }
+
+    /**
+     * 返回指定工单的完整操作流水。
+     */
     protected function getOperations(): void
     {
         $ticketNo = $this->sanitizer->sanitizeSingleLine(Request::query('ticketNo'), 32);

@@ -37,6 +37,9 @@ final class Ticket extends BaseApiSubModule
         ];
     }
 
+    /**
+     * 接收玩家提交的反馈工单，并在需要时处理附件上传。
+     */
     protected function submit(): void
     {
         $formPayload = Request::formBody();
@@ -115,6 +118,9 @@ final class Ticket extends BaseApiSubModule
         ], 201);
     }
 
+    /**
+     * 按工单号或关键词搜索公开可见的反馈工单。
+     */
     protected function search(): void
     {
         $keyword = $this->sanitizer->sanitizeSingleLine(Request::query('keyword'), 120);
@@ -166,6 +172,8 @@ final class Ticket extends BaseApiSubModule
     }
 
     /**
+     * 将工单记录裁剪为前台可公开展示的字段。
+     *
      * @param array<string, mixed> $ticket
      * @return array<string, mixed>
      */
@@ -183,6 +191,9 @@ final class Ticket extends BaseApiSubModule
         return $ticket;
     }
 
+    /**
+     * 将 php.ini 中的容量字符串转换为字节数。
+     */
     private function iniSizeToBytes(string $value): int
     {
         $value = trim($value);

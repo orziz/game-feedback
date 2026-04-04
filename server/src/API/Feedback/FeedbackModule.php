@@ -12,6 +12,9 @@ use GameFeedback\API\BaseApiModule;
  */
 final class FeedbackModule extends BaseApiModule
 {
+    /**
+     * 返回玩家反馈子模块所在目录名。
+     */
     protected function moduleDirName(): string
     {
         return 'Feedback';

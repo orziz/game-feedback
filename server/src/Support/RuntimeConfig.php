@@ -56,6 +56,12 @@ final class RuntimeConfig
             $result['upload_max_bytes'] = $uploadMaxBytes;
         }
 
+        self::applyBool($result, 'attachment_cleanup_enabled', 'APP_ATTACHMENT_CLEANUP_ENABLED');
+        self::applyPositiveInt($result, 'attachment_cleanup_retention_days', 'APP_ATTACHMENT_CLEANUP_RETENTION_DAYS');
+        self::applyPositiveInt($result, 'attachment_cleanup_interval_seconds', 'APP_ATTACHMENT_CLEANUP_INTERVAL_SECONDS');
+        self::applyPositiveInt($result, 'attachment_cleanup_batch_limit', 'APP_ATTACHMENT_CLEANUP_BATCH_LIMIT');
+        self::applyPositiveInt($result, 'attachment_export_link_ttl_seconds', 'APP_ATTACHMENT_EXPORT_LINK_TTL_SECONDS');
+
         self::applyString($result, 'qiniu_access_key', 'APP_QINIU_ACCESS_KEY');
         self::applyString($result, 'qiniu_secret_key', 'APP_QINIU_SECRET_KEY');
         self::applyString($result, 'qiniu_bucket', 'APP_QINIU_BUCKET');

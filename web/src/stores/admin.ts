@@ -47,6 +47,14 @@ export const useAdminStore = defineStore('admin', () => {
   const users = ref<AdminUser[]>([])
   const assignees = ref<AdminAssigneeUser[]>([])
   const usersLoading = ref(false)
+  const cleanupEnabled = ref(true)
+  const cleanupRetentionDays = ref(15)
+  const cleanupIntervalSeconds = ref(600)
+  const cleanupBatchLimit = ref(100)
+  const cleanupLoading = ref(false)
+  const cleanupSaving = ref(false)
+  const cleanupRunning = ref(false)
+  const cleanupLastResult = ref<CleanupRunResult | null>(null)
 
   function setUsersLoading(value: boolean): void {
     usersLoading.value = value
@@ -58,6 +66,29 @@ export const useAdminStore = defineStore('admin', () => {
 
   function setAssignees(value: AdminAssigneeUser[]): void {
     assignees.value = value
+  }
+
+  function setCleanupLoading(value: boolean): void {
+    cleanupLoading.value = value
+  }
+
+  function setCleanupState(enabled: boolean, retentionDays: number, intervalSeconds: number, batchLimit: number): void {
+    cleanupEnabled.value = enabled
+    cleanupRetentionDays.value = retentionDays
+    cleanupIntervalSeconds.value = intervalSeconds
+    cleanupBatchLimit.value = batchLimit
+  }
+
+  function setCleanupSaving(value: boolean): void {
+    cleanupSaving.value = value
+  }
+
+  function setCleanupRunning(value: boolean): void {
+    cleanupRunning.value = value
+  }
+
+  function setCleanupLastResult(value: CleanupRunResult | null): void {
+    cleanupLastResult.value = value
   }
 
   function setTicketsLoading(value: boolean): void {
@@ -155,6 +186,11 @@ export const useAdminStore = defineStore('admin', () => {
     updateForm.value = createDefaultUpdateForm()
     users.value = []
     assignees.value = []
+    cleanupEnabled.value = true
+    cleanupRetentionDays.value = 15
+    cleanupIntervalSeconds.value = 600
+    cleanupBatchLimit.value = 100
+    cleanupLastResult.value = null
     clearStoredToken()
     if (showMessage) message.success(t('messages.adminLogoutSuccess'))
   }
@@ -167,7 +203,9 @@ export const useAdminStore = defineStore('admin', () => {
     isAuthenticated, isSuperAdmin,
     users, usersLoading,
     assignees,
+    cleanupEnabled, cleanupRetentionDays, cleanupIntervalSeconds, cleanupBatchLimit, cleanupLoading, cleanupSaving, cleanupRunning, cleanupLastResult,
     setUsersLoading, setUsers, setAssignees,
+    setCleanupLoading, setCleanupState, setCleanupSaving, setCleanupRunning, setCleanupLastResult,
     setTicketsLoading, setUpdating,
     setPage, setPageSize,
     applyTicketListResponse,

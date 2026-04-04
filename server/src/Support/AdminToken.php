@@ -11,6 +11,9 @@ final class AdminToken
 {
     private const TTL = 12 * 3600;
 
+    /**
+     * 生成管理员登录后发给前端的访问令牌。
+     */
     public static function create(int $userId, string $passwordHash, string $appSecret): string
     {
         // 令牌载荷包含用户ID、签发时间、随机串、密码标记，再用 appSecret 进行 HMAC 签名
@@ -76,6 +79,11 @@ final class AdminToken
         ];
     }
 
+    /**
+     * 根据密码哈希生成令牌里的密码标记。
+     *
+     * 这样一来，只要管理员改了密码，旧令牌就会自动失效。
+     */
     public static function buildPasswordMarker(string $passwordHash, string $appSecret): string
     {
         // 密码标记用于密码变更后使旧令牌失效

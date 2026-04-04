@@ -21,15 +21,19 @@ use Throwable;
  *  3: assigned_to 字段与索引
  *  4: ticket_operations 操作记录表
  *  5: content_hash 字段（用于基于内容哈希的重复工单检测）
+ *  6: attachment cleanup scheduling fields for deferred deletion
  */
 final class SchemaMigrationManager
 {
     /** 当前最新 schema 版本号 */
-    const CURRENT_SCHEMA_VERSION = 5;
+    const CURRENT_SCHEMA_VERSION = 6;
 
     /** @var PDO */
     private $pdo;
 
+    /**
+     * @param PDO $pdo 数据库连接实例
+     */
     public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;
@@ -87,6 +91,12 @@ final class SchemaMigrationManager
             $this->ensureContentHashColumn();
             $this->backfillContentHash();
             $version = 5;
+        }
+
+        if ($version < 6) {
+            // 补齐附件延迟清理字段与索引
+            $this->ensureAttachmentCleanupColumns();
+            $version = 6;
         }
 
         return $version;
@@ -322,6 +332,34 @@ final class SchemaMigrationManager
             );
         } catch (Throwable $e) {
             Responder::error('TABLE_MIGRATION_FAILED', '表结构升级失败（content_hash）：' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * 确保附件延迟清理字段与索引存在（幂等）
+     *
+     * @return void
+     */
+    private function ensureAttachmentCleanupColumns(): void
+    {
+        try {
+            $clauses = [];
+            if (!$this->columnExists('feedback_tickets', 'attachment_cleanup_due_at')) {
+                $clauses[] = 'ADD COLUMN attachment_cleanup_due_at DATETIME NULL';
+            }
+            if (!$this->columnExists('feedback_tickets', 'attachment_deleted_at')) {
+                $clauses[] = 'ADD COLUMN attachment_deleted_at DATETIME NULL';
+            }
+            if ($clauses !== []) {
+                $this->pdo->exec('ALTER TABLE feedback_tickets ' . implode(', ', $clauses));
+            }
+            if (!$this->indexExists('feedback_tickets', 'idx_attachment_cleanup_due_at')) {
+                $this->pdo->exec(
+                    'ALTER TABLE feedback_tickets ADD INDEX idx_attachment_cleanup_due_at (attachment_cleanup_due_at, attachment_deleted_at)'
+                );
+            }
+        } catch (Throwable $e) {
+            Responder::error('TABLE_MIGRATION_FAILED', '表结构升级失败（attachment cleanup）：' . $e->getMessage(), 500);
         }
     }
 

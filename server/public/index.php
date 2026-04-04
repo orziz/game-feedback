@@ -47,7 +47,8 @@ if (!isset($_GET['s']) || !is_string($_GET['s']) || trim($_GET['s']) === '') {
 }
 
 $route = (string)($_GET['s'] ?? '');
-$isAttachmentDownload = $route === 'admin/Ticket/attachmentDownload';
+$isAttachmentDownload = $route === 'admin/Ticket/attachmentDownload'
+    || $route === 'admin/Ticket/publicAttachmentDownload';
 
 if (!$isAttachmentDownload) {
     header('Content-Type: application/json; charset=utf-8');

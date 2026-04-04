@@ -18,6 +18,9 @@ final class UserRepository
     /** @var PDO */
     private $pdo;
 
+    /**
+     * @param PDO $pdo 数据库连接实例
+     */
     public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;

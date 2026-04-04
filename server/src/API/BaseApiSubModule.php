@@ -138,7 +138,7 @@ abstract class BaseApiSubModule
     abstract protected function actionMeta(): array;
 
     /**
-     * 获取并缓存动作元数据（带结构校验与标准化）
+     * 获取并缓存动作说明，避免同一次请求里反复解析。
      *
      * @return array<string, array<string, mixed>>
      */
@@ -152,11 +152,17 @@ abstract class BaseApiSubModule
         return $this->resolvedActionMeta;
     }
 
+    /**
+     * 判断当前子模块里有没有这个动作可执行。
+     */
     public function hasActionFunction(string $functionName): bool
     {
         return isset($this->resolvedActionMeta()[$functionName]) && method_exists($this, $functionName);
     }
 
+    /**
+     * 看看这个动作是否允许当前请求方法调用。
+     */
     public function allowsMethod(string $functionName, string $method): bool
     {
         $meta = $this->resolvedActionMeta()[$functionName] ?? null;
@@ -167,6 +173,9 @@ abstract class BaseApiSubModule
         return in_array(strtoupper($method), $meta[self::META_METHODS], true);
     }
 
+    /**
+     * 看看这个动作在安装完成前能不能先访问。
+     */
     public function allowsBeforeInstall(string $functionName): bool
     {
         $meta = $this->resolvedActionMeta()[$functionName] ?? null;
@@ -177,6 +186,9 @@ abstract class BaseApiSubModule
         return (bool)($meta[self::META_ALLOW_BEFORE_INSTALL] ?? false);
     }
 
+    /**
+     * 真正执行目标动作。
+     */
     public function dispatch(string $functionName): void
     {
         if (!$this->hasActionFunction($functionName)) {
@@ -190,10 +202,9 @@ abstract class BaseApiSubModule
     }
 
     /**
-     * 动作执行前的统一钩子
+     * 执行动作前先做统一处理。
      *
-     * 默认处理声明式限流；子类可覆盖并调用 parent::beforeDispatch()
-     * 追加鉴权、审计等横切能力。
+     * 默认会先处理限流；子类也可以在这里继续补鉴权等逻辑。
      *
      * @param array<string, mixed> $meta
      * @return void
@@ -204,7 +215,7 @@ abstract class BaseApiSubModule
     }
 
     /**
-     * 构造标准化的限流元数据，供各子模块在 actionMeta 中复用
+     * 生成一份统一格式的限流配置，给 actionMeta 直接复用。
      *
      * @return array<string, int|string>
      */
@@ -228,7 +239,7 @@ abstract class BaseApiSubModule
     }
 
     /**
-     * 根据 actionMeta 中的 rate_limit 声明执行限流
+     * 按 actionMeta 里的限流规则判断这次请求能不能继续。
      *
      * @param array<string, mixed> $meta
      * @return void
