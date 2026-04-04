@@ -168,7 +168,13 @@ onBeforeUnmount(() => {
           <p class="admin-detail-card__eyebrow">{{ t('admin.detailEyebrow') }}</p>
           <h3>{{ t('admin.detailTitle', { ticketNo: ticket.ticket_no }) }}</h3>
         </div>
-        <TicketMetaTag kind="status" :value="ticket.status" effect="dark" round />
+        <div class="admin-detail-card__header-side">
+          <TicketMetaTag kind="status" :value="ticket.status" effect="dark" round />
+          <div class="admin-detail-card__time-list">
+            <span class="admin-detail-card__time-item">{{ t('common.createdAt') }}：{{ ticket.created_at }}</span>
+            <span class="admin-detail-card__time-item">{{ t('common.updatedAt') }}：{{ ticket.updated_at }}</span>
+          </div>
+        </div>
       </div>
     </template>
 
@@ -309,6 +315,27 @@ onBeforeUnmount(() => {
   color: var(--brand-strong);
 }
 
+.admin-detail-card__header-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.admin-detail-card__time-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.admin-detail-card__time-item {
+  font-size: 12px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
 .admin-detail-card__content {
   display: flex;
   flex-direction: column;
@@ -387,8 +414,9 @@ onBeforeUnmount(() => {
 
 .admin-detail-card__tip {
   display: inline-block;
-  margin-top: 8px;
   color: var(--ink-soft);
+  min-width: 150px;
+  margin-left: 10px;
 }
 
 .admin-detail-card__multiline {
@@ -454,6 +482,22 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
+  .admin-detail-card__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-detail-card__header-side {
+    justify-content: flex-start;
+    align-items: flex-start;
+    gap: 6px;
+    padding-top: 0;
+  }
+
+  .admin-detail-card__time-list {
+    align-items: flex-start;
+  }
+
   .admin-detail-row {
     flex-direction: column;
     gap: 6px;
