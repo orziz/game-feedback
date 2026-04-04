@@ -349,13 +349,13 @@ async function handleSubmit(): Promise<void> {
 
 .submit-form__row {
   display: grid;
-  grid-template-columns: 110px minmax(0, 1fr);
-  align-items: center;
-  gap: 14px;
+  grid-template-columns: 1fr;
+  align-items: stretch;
+  gap: 8px;
 }
 
 .submit-form__row--top {
-  align-items: start;
+  align-items: stretch;
   margin-bottom: 18px;
 }
 
@@ -365,9 +365,9 @@ async function handleSubmit(): Promise<void> {
 }
 
 .submit-form__row-label {
+  min-width: 0;
   color: var(--ink);
   font-size: 14px;
-  min-width: 180px;
   font-weight: 700;
   line-height: 1.4;
 }
