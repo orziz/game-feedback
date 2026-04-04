@@ -28,7 +28,7 @@
 
 ## 技术栈
 
-- **前端**：Vue 3 + TypeScript + Vite + Element Plus（现代、响应式界面）
+- **前端**：Vue 3 + TypeScript + Vite + Naive UI（现代化 UI 组件，响应式设计）
 - **后端**：纯PHP 7.2+（兼容性强，无框架依赖）
 - **数据库**：MySQL 5.6+（自动建表，简单可靠）
 
@@ -42,7 +42,7 @@
 # 可选：先复制默认环境变量配置
 cp .env.example .env
 
-# 启动
+# 启动（支持自定义 .env 文件覆盖默认环境变量）
 docker compose up -d --build
 ```
 
@@ -149,7 +149,7 @@ php -S 127.0.0.1:8000 router.php
 
 **验证后端是否正常**：
 - 访问 [http://127.0.0.1:8000/index.php](http://127.0.0.1:8000/index.php)
-- 或健康检查： [http://127.0.0.1:8000/index.php?action=system.status](http://127.0.0.1:8000/index.php?action=system.status)
+- 或健康检查： [http://127.0.0.1:8000/api?s=system/Status/health](http://127.0.0.1:8000/api?s=system/Status/health)
 
 ### 启动前端
 
