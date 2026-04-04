@@ -101,7 +101,7 @@ final class Ticket extends AdminSubModule
 
         $keyword = $this->sanitizer->sanitizeSingleLine(Request::query('keyword'), 120);
         $page = $this->sanitizer->parseInt(Request::query('page', '1'), 1, 100000);
-        $pageSize = $this->sanitizer->parseInt(Request::query('pageSize', '20'), 5, 100);
+        $pageSize = $this->sanitizer->parseInt(Request::query('pageSize', '20'), 5, 500);
 
         $result = $this->createTicketRepository()->listTickets($status, $type, $severity, $keyword, $assignedTo, $page, $pageSize);
 
