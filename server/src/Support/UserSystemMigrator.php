@@ -56,6 +56,7 @@ final class UserSystemMigrator
         $newConfig = $dbConfig;
         $configChanged = false;
         $pdo = Database::createConfiguredPdo($dbConfig);
+        Database::ensureSupportedServer($pdo, false);
         $schemaMigrationManager = new SchemaMigrationManager($pdo);
 
         if ($needsSchemaMigration) {

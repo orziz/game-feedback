@@ -182,6 +182,83 @@ END$$
 CALL _gf_create_operations()$$
 DROP PROCEDURE IF EXISTS _gf_create_operations$$
 
+-- ------------------------------------------------------------
+-- 步骤 7：补齐 content_hash 字段与索引
+-- ------------------------------------------------------------
+DROP PROCEDURE IF EXISTS _gf_add_content_hash$$
+CREATE PROCEDURE _gf_add_content_hash()
+BEGIN
+  DECLARE v_cnt INT DEFAULT 0;
+
+  SELECT COUNT(*) INTO v_cnt
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME   = 'feedback_tickets'
+    AND COLUMN_NAME  = 'content_hash';
+
+  IF v_cnt = 0 THEN
+    ALTER TABLE feedback_tickets
+      ADD COLUMN content_hash CHAR(32) NULL;
+  END IF;
+
+  SELECT COUNT(*) INTO v_cnt
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME   = 'feedback_tickets'
+    AND INDEX_NAME   = 'idx_content_hash';
+
+  IF v_cnt = 0 THEN
+    ALTER TABLE feedback_tickets
+      ADD INDEX idx_content_hash (content_hash);
+  END IF;
+END$$
+CALL _gf_add_content_hash()$$
+DROP PROCEDURE IF EXISTS _gf_add_content_hash$$
+
+-- ------------------------------------------------------------
+-- 步骤 8：补齐附件延迟清理字段与索引
+-- ------------------------------------------------------------
+DROP PROCEDURE IF EXISTS _gf_add_attachment_cleanup$$
+CREATE PROCEDURE _gf_add_attachment_cleanup()
+BEGIN
+  DECLARE v_cnt INT DEFAULT 0;
+
+  SELECT COUNT(*) INTO v_cnt
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME   = 'feedback_tickets'
+    AND COLUMN_NAME  = 'attachment_cleanup_due_at';
+
+  IF v_cnt = 0 THEN
+    ALTER TABLE feedback_tickets
+      ADD COLUMN attachment_cleanup_due_at DATETIME NULL;
+  END IF;
+
+  SELECT COUNT(*) INTO v_cnt
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME   = 'feedback_tickets'
+    AND COLUMN_NAME  = 'attachment_deleted_at';
+
+  IF v_cnt = 0 THEN
+    ALTER TABLE feedback_tickets
+      ADD COLUMN attachment_deleted_at DATETIME NULL;
+  END IF;
+
+  SELECT COUNT(*) INTO v_cnt
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME   = 'feedback_tickets'
+    AND INDEX_NAME   = 'idx_attachment_cleanup_due_at';
+
+  IF v_cnt = 0 THEN
+    ALTER TABLE feedback_tickets
+      ADD INDEX idx_attachment_cleanup_due_at (attachment_cleanup_due_at, attachment_deleted_at);
+  END IF;
+END$$
+CALL _gf_add_attachment_cleanup()$$
+DROP PROCEDURE IF EXISTS _gf_add_attachment_cleanup$$
+
 DELIMITER ;
 
 -- ------------------------------------------------------------

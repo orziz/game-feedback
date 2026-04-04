@@ -246,15 +246,15 @@ SQL;
         $countStmt->execute($params);
         $total = (int)$countStmt->fetchColumn();
 
+        $page = max(1, (int)$page);
+        $pageSize = max(1, (int)$pageSize);
         $offset = ($page - 1) * $pageSize;
-        $sql = 'SELECT t.ticket_no, t.type, t.severity, t.title, t.contact, t.status, t.admin_note, t.assigned_to, COALESCE(u.username, \'\') as assigned_username, t.attachment_name, t.created_at, t.updated_at' . $baseSql . ' ORDER BY t.created_at DESC LIMIT :limit OFFSET :offset';
+        $sql = 'SELECT t.ticket_no, t.type, t.severity, t.title, t.contact, t.status, t.admin_note, t.assigned_to, COALESCE(u.username, \'\') as assigned_username, t.attachment_name, t.created_at, t.updated_at' . $baseSql . ' ORDER BY t.created_at DESC LIMIT ' . $pageSize . ' OFFSET ' . $offset;
 
         $stmt = $this->pdo->prepare($sql);
         foreach ($params as $key => $value) {
             $stmt->bindValue($key, $value);
         }
-        $stmt->bindValue(':limit', $pageSize, PDO::PARAM_INT);
-        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();
 
         return [
@@ -290,15 +290,15 @@ SQL;
         $countStmt->execute($params);
         $total = (int)$countStmt->fetchColumn();
 
+        $page = max(1, (int)$page);
+        $pageSize = max(1, (int)$pageSize);
         $offset = ($page - 1) * $pageSize;
-        $sql = 'SELECT ticket_no, type, severity, title, details, status, admin_note, created_at, updated_at' . $baseSql . ' ORDER BY updated_at DESC LIMIT :limit OFFSET :offset';
+        $sql = 'SELECT ticket_no, type, severity, title, details, status, admin_note, created_at, updated_at' . $baseSql . ' ORDER BY updated_at DESC LIMIT ' . $pageSize . ' OFFSET ' . $offset;
 
         $stmt = $this->pdo->prepare($sql);
         foreach ($params as $key => $value) {
             $stmt->bindValue($key, $value);
         }
-        $stmt->bindValue(':limit', $pageSize, PDO::PARAM_INT);
-        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();
 
         return [
@@ -376,10 +376,9 @@ SQL;
             'AND attachment_cleanup_due_at IS NOT NULL ' .
             'AND attachment_cleanup_due_at <= :now ' .
             'ORDER BY attachment_cleanup_due_at ASC ' .
-            'LIMIT :limit'
+            'LIMIT ' . $safeLimit
         );
         $stmt->bindValue(':now', $now);
-        $stmt->bindValue(':limit', $safeLimit, PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -415,16 +414,40 @@ SQL;
     {
         $safeDays = max(1, $retentionDays);
         $stmt = $this->pdo->prepare(
-            'UPDATE feedback_tickets SET attachment_cleanup_due_at = DATE_ADD(updated_at, INTERVAL :retention_days DAY) ' .
+            'SELECT ticket_no, updated_at FROM feedback_tickets ' .
             'WHERE status IN (2, 3) ' .
             'AND attachment_storage IS NOT NULL ' .
             'AND attachment_key IS NOT NULL ' .
             'AND attachment_deleted_at IS NULL ' .
             'AND attachment_cleanup_due_at IS NULL'
         );
-        $stmt->bindValue(':retention_days', $safeDays, PDO::PARAM_INT);
         $stmt->execute();
-        return $stmt->rowCount();
+
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if ($rows === []) {
+            return 0;
+        }
+
+        $update = $this->pdo->prepare(
+            'UPDATE feedback_tickets SET attachment_cleanup_due_at = :attachment_cleanup_due_at WHERE ticket_no = :ticket_no'
+        );
+        $affected = 0;
+        foreach ($rows as $row) {
+            $ticketNo = (string)($row['ticket_no'] ?? '');
+            $updatedAt = (string)($row['updated_at'] ?? '');
+            if ($ticketNo === '' || $updatedAt === '') {
+                continue;
+            }
+
+            $dueAt = date('Y-m-d H:i:s', strtotime($updatedAt . ' +' . $safeDays . ' days'));
+            $update->execute([
+                ':attachment_cleanup_due_at' => $dueAt,
+                ':ticket_no' => $ticketNo,
+            ]);
+            $affected += $update->rowCount();
+        }
+
+        return $affected;
     }
 
     /**

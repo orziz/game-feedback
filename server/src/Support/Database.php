@@ -14,6 +14,9 @@ use Throwable;
  */
 final class Database
 {
+    /** 最低支持的 MySQL 版本 */
+    private const MIN_SUPPORTED_MYSQL_VERSION = '5.6.0';
+
     /**
      * 根据连接参数创建 PDO 实例
      *
@@ -68,6 +71,53 @@ final class Database
             (string)$dbConfig['password'],
             false // 运行时不对外暴露连接错误详情
         );
+    }
+
+    /**
+     * 校验当前数据库服务端版本是否在支持范围内。
+     */
+    public static function ensureSupportedServer(PDO $pdo, bool $exposeError = false): void
+    {
+        $serverInfo = self::serverInfo($pdo);
+        $minimumVersion = self::MIN_SUPPORTED_MYSQL_VERSION;
+
+        if (version_compare($serverInfo['normalizedVersion'], $minimumVersion, '>=')) {
+            return;
+        }
+
+        $message = sprintf(
+            '当前数据库版本过低：MySQL %s，至少需要 %s。',
+            $serverInfo['displayVersion'],
+            $minimumVersion
+        );
+
+        if (!$exposeError) {
+            error_log('[DB] Unsupported server version: MySQL ' . $serverInfo['displayVersion']);
+            $message = '数据库版本过低，请联系管理员升级到受支持版本。';
+        }
+
+        Responder::send([
+            'ok' => false,
+            'code' => 'DB_VERSION_UNSUPPORTED',
+            'message' => $message,
+        ], 500);
+    }
+
+    /**
+     * 读取并规范化当前数据库服务端信息。
+     *
+     * @return array<string, mixed>
+     */
+    public static function serverInfo(PDO $pdo): array
+    {
+        $rawVersion = (string)$pdo->getAttribute(PDO::ATTR_SERVER_VERSION);
+        $normalizedVersion = self::extractServerVersion($rawVersion);
+
+        return [
+            'rawVersion' => $rawVersion,
+            'displayVersion' => $normalizedVersion,
+            'normalizedVersion' => $normalizedVersion,
+        ];
     }
 
     /**
@@ -247,6 +297,18 @@ return [
 ];
 
 PHP;
+    }
+
+    /**
+     * 提取服务端版本号中的 x.y.z 主体，屏蔽 MariaDB 前缀等干扰文本。
+     */
+    private static function extractServerVersion(string $rawVersion): string
+    {
+        if (preg_match('/(\d+\.\d+\.\d+)/', $rawVersion, $matches) === 1) {
+            return $matches[1];
+        }
+
+        return '0.0.0';
     }
 
     /**

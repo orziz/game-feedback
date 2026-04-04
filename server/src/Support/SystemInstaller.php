@@ -84,6 +84,7 @@ final class SystemInstaller
 
         // 安装流程允许暴露数据库连接错误详情，便于用户修正安装参数
         $pdo = Database::createPdo($host, $port, $database, $username, $password, true);
+        Database::ensureSupportedServer($pdo, true);
         $schemaMigrationManager = new SchemaMigrationManager($pdo);
 
         $schemaMigrationManager->installLatestSchema();
