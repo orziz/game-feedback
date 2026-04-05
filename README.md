@@ -132,7 +132,7 @@ docker compose down -v
 2. **创建数据库**（只需执行一次）：
 
 ```sql
-CREATE DATABASE game_feedback DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE game_feedback DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 ```
 
 > 项目会自动创建表结构，但数据库需要你手动先建好。
