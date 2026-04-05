@@ -81,14 +81,14 @@ const columns = computed<UiDataTableColumns<TicketRecord>>(() => [
   {
     key: 'ticket_no',
     title: t('admin.ticketIdCol'),
-    minWidth: 156,
+    minWidth: 146,
     ellipsis: true,
     render: (row: TicketRecord) => row.ticket_no,
   },
   {
     key: 'type',
     title: t('admin.typeCol'),
-    width: 92,
+    width: 82,
     align: 'center',
     render: (row: TicketRecord) => h(TicketMetaTag, { kind: 'type', value: row.type }),
   },
@@ -120,7 +120,7 @@ const columns = computed<UiDataTableColumns<TicketRecord>>(() => [
   {
     key: 'assigned_username',
     title: t('admin.assignedToCol'),
-    width: 100,
+    width: 150,
     align: 'center',
     render: (row: TicketRecord) => {
       if (!row.assigned_to) {
