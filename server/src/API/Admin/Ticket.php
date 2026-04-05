@@ -100,6 +100,9 @@ final class Ticket extends AdminSubModule
         $assignedTo = $assignedToRaw !== '' ? $this->sanitizer->parseInt($assignedToRaw, 1, 9999999999) : null;
 
         $keyword = $this->sanitizer->sanitizeSingleLine(Request::query('keyword'), 120);
+        if ($keyword !== '' && preg_match('/^FB\d{8}[A-F0-9]{6}$/i', $keyword) === 1) {
+            $keyword = strtoupper($keyword);
+        }
         $page = $this->sanitizer->parseInt(Request::query('page', '1'), 1, 100000);
         $pageSize = $this->sanitizer->parseInt(Request::query('pageSize', '20'), 5, 500);
 
