@@ -156,7 +156,7 @@ export default {
     typeFilterPlaceholder: 'Filter by type',
     severityFilterPlaceholder: 'Filter by severity',
     assignedFilterPlaceholder: 'Filter by assigned user',
-    keywordPlaceholder: 'Search by title or content',
+    keywordPlaceholder: 'Search by ticket no. / title / content / contact',
     queueEyebrow: 'TICKET QUEUE',
     queueTitle: 'Ticket Queue',
     queueDescription: 'Click any row to load the ticket and handle it.',

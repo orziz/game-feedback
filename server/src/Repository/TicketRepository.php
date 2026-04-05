@@ -232,10 +232,11 @@ SQL;
         }
 
         if ($keyword !== '') {
-            $baseSql .= ' AND (t.ticket_no = :keyword_ticket_no OR t.title LIKE :keyword_title OR t.details LIKE :keyword_details)';
+            $baseSql .= ' AND (t.ticket_no = :keyword_ticket_no OR t.title LIKE :keyword_title OR t.details LIKE :keyword_details OR t.contact LIKE :keyword_contact)';
             $params[':keyword_ticket_no'] = $keyword;
             $params[':keyword_title'] = '%' . $keyword . '%';
             $params[':keyword_details'] = '%' . $keyword . '%';
+            $params[':keyword_contact'] = '%' . $keyword . '%';
         }
 
         if ($assignedTo !== null) {

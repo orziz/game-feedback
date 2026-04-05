@@ -156,7 +156,7 @@ export default {
     typeFilterPlaceholder: '按类型筛选',
     severityFilterPlaceholder: '按重要程度筛选',
     assignedFilterPlaceholder: '按指派用户筛选',
-    keywordPlaceholder: '按标题或内容搜索',
+    keywordPlaceholder: '按工单号 / 标题 / 内容 / 联系方式搜索',
     queueEyebrow: 'TICKET QUEUE',
     queueTitle: '工单列表',
     queueDescription: '点击任一行查看详情并进行处理。',
