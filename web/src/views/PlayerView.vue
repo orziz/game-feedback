@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { defineAsyncComponent } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import SubmitTab from '@/components/SubmitTab.vue'
 import SolutionSearchTab from '@/components/SolutionSearchTab.vue'
-import InstallPanel from '@/components/InstallPanel.vue'
+
+const InstallPanel = defineAsyncComponent(() => import('@/components/InstallPanel.vue'))
 
 const { t } = useI18n()
 const appStore = useAppStore()
