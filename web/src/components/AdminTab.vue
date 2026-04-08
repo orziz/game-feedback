@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { defineAsyncComponent, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useMessage, useDialog } from 'naive-ui'
@@ -8,10 +8,11 @@ import { useAdminStore } from '@/stores/admin'
 import { getApiError, getErrorMessage } from '@/utils/errors'
 import { triggerBlobDownload } from '@/utils/download'
 import AdminFiltersBar from '@/components/admin/AdminFiltersBar.vue'
-import AdminBatchAssignDialog from '@/components/admin/AdminBatchAssignDialog.vue'
 import AdminTicketTable from '@/components/admin/AdminTicketTable.vue'
-import AdminTicketDetail from '@/components/admin/AdminTicketDetail.vue'
-import AdminUserManagement from '@/components/admin/AdminUserManagement.vue'
+
+const AdminBatchAssignDialog = defineAsyncComponent(() => import('@/components/admin/AdminBatchAssignDialog.vue'))
+const AdminTicketDetail = defineAsyncComponent(() => import('@/components/admin/AdminTicketDetail.vue'))
+const AdminUserManagement = defineAsyncComponent(() => import('@/components/admin/AdminUserManagement.vue'))
 
 const { t } = useI18n()
 const message = useMessage()
