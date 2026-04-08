@@ -11,6 +11,15 @@ function createDefaultUpdateForm(): AdminUpdateForm {
   return { status: 0, severity: 1, adminNote: '' }
 }
 
+function createEmptyStatusCounts(): TicketStatusCountMap {
+  return {
+    0: 0,
+    1: 0,
+    2: 0,
+    3: 0,
+  }
+}
+
 function readStoredToken(): string {
   return window.sessionStorage.getItem(TOKEN_STORAGE_KEY) || ''
 }
@@ -33,10 +42,14 @@ export const useAdminStore = defineStore('admin', () => {
   const typeFilter = ref<FeedbackType | null>(null)
   const severityFilter = ref<Severity | null>(null)
   const assignedFilter = ref<number | null>(null)
+  const createdFromFilter = ref<string | null>(null)
+  const createdToFilter = ref<string | null>(null)
+  const timeFilterMode = ref<AdminTimeFilterMode>('created')
   const keyword = ref('')
   const page = ref(1)
   const pageSize = ref(20)
   const total = ref(0)
+  const statusCounts = ref<TicketStatusCountMap>(createEmptyStatusCounts())
 
   const tickets = ref<TicketRecord[]>([])
   const selectedTicketNo = ref('')
@@ -107,10 +120,16 @@ export const useAdminStore = defineStore('admin', () => {
     pageSize.value = value
   }
 
-  function applyTicketListResponse(payload: { tickets: TicketRecord[]; total: number; page: number; pageSize: number }): void {
+  function applyTicketListResponse(payload: { tickets: TicketRecord[]; total: number; page: number; pageSize: number; statusCounts: TicketStatusCountMap }): void {
     const maxPage = Math.max(1, Math.ceil(payload.total / payload.pageSize))
     tickets.value = payload.tickets
     total.value = payload.total
+    statusCounts.value = {
+      0: payload.statusCounts[0] ?? 0,
+      1: payload.statusCounts[1] ?? 0,
+      2: payload.statusCounts[2] ?? 0,
+      3: payload.statusCounts[3] ?? 0,
+    }
     page.value = payload.page > maxPage ? maxPage : payload.page
   }
 
@@ -182,7 +201,11 @@ export const useAdminStore = defineStore('admin', () => {
     typeFilter.value = null
     severityFilter.value = null
     assignedFilter.value = null
+    createdFromFilter.value = null
+    createdToFilter.value = null
+    timeFilterMode.value = 'created'
     keyword.value = ''
+    statusCounts.value = createEmptyStatusCounts()
     updateForm.value = createDefaultUpdateForm()
     users.value = []
     assignees.value = []
@@ -197,8 +220,8 @@ export const useAdminStore = defineStore('admin', () => {
 
   return {
     token, loading, updating, currentUser,
-    statusFilter, typeFilter, severityFilter, assignedFilter, keyword,
-    page, pageSize, total, tickets,
+    statusFilter, typeFilter, severityFilter, assignedFilter, createdFromFilter, createdToFilter, timeFilterMode, keyword,
+    page, pageSize, total, statusCounts, tickets,
     selectedTicketNo, selectedTicket, ticketOperations, updateForm,
     isAuthenticated, isSuperAdmin,
     users, usersLoading,

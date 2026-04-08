@@ -43,11 +43,15 @@ const {
   typeFilter,
   severityFilter,
   assignedFilter,
+  createdFromFilter,
+  createdToFilter,
+  timeFilterMode,
   keyword,
   tickets,
   page,
   pageSize,
   total,
+  statusCounts,
   selectedTicket,
   selectedTicketNo,
   updateForm,
@@ -178,10 +182,14 @@ async function loadTickets(nextPage = 1): Promise<void> {
       severity: severityFilter.value ?? undefined,
       keyword: keyword.value.trim() || undefined,
       assignedTo: assignedFilter.value ?? undefined,
+      createdFrom: createdFromFilter.value ?? undefined,
+      createdTo: createdToFilter.value ?? undefined,
+      useUpdatedTime: timeFilterMode.value === 'updated' ? true : undefined,
     })
     applyTicketListResponse({
       tickets: data.tickets,
       total: data.pagination?.total || 0,
+      statusCounts: data.statusCounts,
       page: nextPage,
       pageSize: pageSize.value,
     })
@@ -550,6 +558,9 @@ async function handleBatchAssign(assignedTo: number): Promise<void> {
               v-model:type-filter="typeFilter"
               v-model:severity-filter="severityFilter"
               v-model:assigned-filter="assignedFilter"
+              v-model:created-from-filter="createdFromFilter"
+              v-model:created-to-filter="createdToFilter"
+              v-model:time-filter-mode="timeFilterMode"
               v-model:keyword="keyword"
               :loading="loading"
               compact
@@ -564,6 +575,7 @@ async function handleBatchAssign(assignedTo: number): Promise<void> {
               :page="page"
               :page-size="pageSize"
               :total="total"
+              :status-counts="statusCounts"
               :checked-ticket-nos="checkedTicketNos"
               :can-batch-assign="checkedTicketNos.length > 0"
               @select="handleSelectTicket"

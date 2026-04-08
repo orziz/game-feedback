@@ -29,6 +29,9 @@ declare namespace API.Admin.Ticket {
       severity?: Severity
       keyword?: string
       assignedTo?: number
+      createdFrom?: string
+      createdTo?: string
+      useUpdatedTime?: boolean
     }
 
     interface Detail {
@@ -114,8 +117,11 @@ interface AdminUpdateForm {
   assignedTo?: number | null
 }
 
+type TicketStatusCountMap = Record<TicketStatus, number>
+
 interface AdminListResponse extends ApiResponseBase {
   tickets: TicketRecord[]
+  statusCounts: TicketStatusCountMap
   pagination?: PaginationInfo
 }
 

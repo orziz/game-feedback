@@ -98,6 +98,13 @@ final class Ticket extends AdminSubModule
 
         $assignedToRaw = Request::query('assignedTo');
         $assignedTo = $assignedToRaw !== '' ? $this->sanitizer->parseInt($assignedToRaw, 1, 9999999999) : null;
+        $useUpdatedTime = $this->isTruthy(Request::query('useUpdatedTime'));
+
+        $createdFrom = $this->normalizeDateBoundary(Request::query('createdFrom'), false);
+        $createdTo = $this->normalizeDateBoundary(Request::query('createdTo'), true);
+        if ($createdFrom !== null && $createdTo !== null && strcmp($createdFrom, $createdTo) > 0) {
+            Responder::error('INVALID_DATE_RANGE', '起始日期不能晚于截止日期。', 422);
+        }
 
         $keyword = $this->sanitizer->sanitizeSingleLine(Request::query('keyword'), 120);
         if ($keyword !== '' && preg_match('/^FB\d{8}[A-F0-9]{6}$/i', $keyword) === 1) {
@@ -106,11 +113,12 @@ final class Ticket extends AdminSubModule
         $page = $this->sanitizer->parseInt(Request::query('page', '1'), 1, 100000);
         $pageSize = $this->sanitizer->parseInt(Request::query('pageSize', '20'), 5, 500);
 
-        $result = $this->createTicketRepository()->listTickets($status, $type, $severity, $keyword, $assignedTo, $page, $pageSize);
+        $result = $this->createTicketRepository()->listTickets($status, $type, $severity, $keyword, $assignedTo, $createdFrom, $createdTo, $useUpdatedTime, $page, $pageSize);
 
         Responder::send([
             'ok' => true,
             'tickets' => $result['items'],
+            'statusCounts' => $result['statusCounts'],
             'pagination' => [
                 'total' => $result['total'],
                 'page' => $page,
@@ -118,6 +126,40 @@ final class Ticket extends AdminSubModule
                 'totalPages' => max(1, (int)ceil($result['total'] / $pageSize)),
             ],
         ]);
+    }
+
+    /**
+     * 将日期字符串标准化为 DATETIME 查询边界。
+     */
+    private function normalizeDateBoundary(string $value, bool $isEnd): ?string
+    {
+        $date = $this->sanitizer->sanitizeSingleLine($value, 19);
+        if ($date === '') {
+            return null;
+        }
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) === 1) {
+            $timestamp = strtotime($date . ' ' . ($isEnd ? '23:59:59' : '00:00:00'));
+        } elseif (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $date) === 1) {
+            $timestamp = strtotime($date);
+        } else {
+            Responder::error('INVALID_DATE_RANGE', '日期筛选格式不正确。', 422);
+        }
+
+        if ($timestamp === false) {
+            Responder::error('INVALID_DATE_RANGE', '日期筛选格式不正确。', 422);
+        }
+
+        return date('Y-m-d H:i:s', $timestamp);
+    }
+
+    /**
+     * 判断查询参数是否为真值。
+     */
+    private function isTruthy(string $value): bool
+    {
+        $normalized = strtolower(trim($value));
+        return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
     }
 
     /**

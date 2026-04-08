@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { NCheckbox, NButton, NTag } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import TicketMetaTag from '@/components/shared/TicketMetaTag.vue'
+import { getStatusTagType, translateStatus } from '@/i18n'
 
 const props = defineProps<{
   tickets: TicketRecord[]
@@ -11,6 +12,7 @@ const props = defineProps<{
   page: number
   pageSize: number
   total: number
+  statusCounts: TicketStatusCountMap
   checkedTicketNos: string[]
   canBatchAssign: boolean
 }>()
@@ -47,6 +49,7 @@ function handleSelectionCellClick(row: TicketRecord, event: MouseEvent): void {
 
 const isAllChecked = computed(() => props.tickets.length > 0 && props.tickets.every((ticket) => props.checkedTicketNos.includes(ticket.ticket_no)))
 const isPartiallyChecked = computed(() => props.checkedTicketNos.length > 0 && !isAllChecked.value)
+const summaryStatuses: TicketStatus[] = [0, 1, 2, 3]
 
 const columns = computed<UiDataTableColumns<TicketRecord>>(() => [
   {
@@ -207,7 +210,21 @@ function createRowProps(row: TicketRecord) {
     </div>
 
     <div class="admin-pagination-wrap">
-      <span class="admin-pagination__total">{{ t('admin.queueTotal', { count: total }) }}</span>
+      <div class="admin-pagination__summary">
+        <span class="admin-pagination__total">{{ t('admin.queueTotal', { count: total }) }}</span>
+        <div class="admin-pagination__status-tags">
+          <n-tag
+            v-for="status in summaryStatuses"
+            :key="status"
+            size="small"
+            round
+            :bordered="false"
+            :type="getStatusTagType(status)"
+          >
+            {{ translateStatus(t, status) }} {{ statusCounts[status] ?? 0 }}
+          </n-tag>
+        </div>
+      </div>
       <n-pagination
         class="admin-pagination"
         size="small"
@@ -264,10 +281,17 @@ function createRowProps(row: TicketRecord) {
 .admin-pagination-wrap {
   display: flex;
   flex-shrink: 0;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
   gap: 10px;
   min-height: 34px;
+}
+
+.admin-pagination__summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .admin-pagination__total {
@@ -277,6 +301,13 @@ function createRowProps(row: TicketRecord) {
   color: var(--ink);
   font-weight: 700;
   white-space: nowrap;
+}
+
+.admin-pagination__status-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .admin-table-shell__body {

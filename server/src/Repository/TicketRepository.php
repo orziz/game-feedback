@@ -207,14 +207,18 @@ SQL;
         * @param int|null $severity    严重程度筛选（null 表示不筛选）
      * @param string   $keyword     标题/内容关键词（空字符串表示不筛选）
      * @param int|null $assignedTo  指派用户 ID 筛选（null 表示不筛选）
-     * @param int      $page        页码（从 1 开始）
-     * @param int      $pageSize    每页条数
-     * @return array{total: int, items: array<int, array<string, mixed>>}
+     * @param string|null $createdFrom 创建时间起始（含）
+     * @param string|null $createdTo   创建时间截止（含）
+     * @param bool        $useUpdatedTime 是否按更新时间筛选
+     * @param int         $page           页码（从 1 开始）
+     * @param int         $pageSize       每页条数
+     * @return array{total: int, items: array<int, array<string, mixed>>, statusCounts: array<int, int>}
      */
-    public function listTickets(?int $status = null, ?int $type = null, ?int $severity = null, string $keyword = '', ?int $assignedTo = null, int $page = 1, int $pageSize = 20): array
+    public function listTickets(?int $status = null, ?int $type = null, ?int $severity = null, string $keyword = '', ?int $assignedTo = null, ?string $createdFrom = null, ?string $createdTo = null, bool $useUpdatedTime = false, int $page = 1, int $pageSize = 20): array
     {
         $baseSql = ' FROM feedback_tickets t LEFT JOIN admin_users u ON t.assigned_to = u.id WHERE 1=1';
         $params = [];
+        $timeFieldSql = $useUpdatedTime ? 't.updated_at' : 't.created_at';
 
         if ($status !== null) {
             $baseSql .= ' AND t.status = :status';
@@ -244,9 +248,34 @@ SQL;
             $params[':assigned_to'] = $assignedTo;
         }
 
+        if ($createdFrom !== null) {
+            $baseSql .= ' AND ' . $timeFieldSql . ' >= :created_from';
+            $params[':created_from'] = $createdFrom;
+        }
+
+        if ($createdTo !== null) {
+            $baseSql .= ' AND ' . $timeFieldSql . ' <= :created_to';
+            $params[':created_to'] = $createdTo;
+        }
+
         $countStmt = $this->pdo->prepare('SELECT COUNT(1)' . $baseSql);
         $countStmt->execute($params);
         $total = (int)$countStmt->fetchColumn();
+
+        $statusCounts = [
+            0 => 0,
+            1 => 0,
+            2 => 0,
+            3 => 0,
+        ];
+        $statusStmt = $this->pdo->prepare('SELECT t.status, COUNT(1) AS aggregate_count' . $baseSql . ' GROUP BY t.status');
+        $statusStmt->execute($params);
+        foreach ($statusStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $statusValue = isset($row['status']) ? (int)$row['status'] : -1;
+            if (array_key_exists($statusValue, $statusCounts)) {
+                $statusCounts[$statusValue] = (int)($row['aggregate_count'] ?? 0);
+            }
+        }
 
         $page = max(1, (int)$page);
         $pageSize = max(1, (int)$pageSize);
@@ -261,6 +290,7 @@ SQL;
 
         return [
             'total' => $total,
+            'statusCounts' => $statusCounts,
             'items' => $stmt->fetchAll(PDO::FETCH_ASSOC),
         ];
     }
