@@ -210,11 +210,12 @@ SQL;
      * @param string|null $createdFrom 创建时间起始（含）
      * @param string|null $createdTo   创建时间截止（含）
      * @param bool        $useUpdatedTime 是否按更新时间筛选
-     * @param int         $page           页码（从 1 开始）
-     * @param int         $pageSize       每页条数
+    * @param int         $page       页码（从 1 开始）
+    * @param int         $pageSize   每页条数
+    * @param bool        $forExport  是否按导出模式返回扩展字段
      * @return array{total: int, items: array<int, array<string, mixed>>, statusCounts: array<int, int>}
      */
-    public function listTickets(?int $status = null, ?int $type = null, ?int $severity = null, string $keyword = '', ?int $assignedTo = null, ?string $createdFrom = null, ?string $createdTo = null, bool $useUpdatedTime = false, int $page = 1, int $pageSize = 20): array
+    public function listTickets(?int $status = null, ?int $type = null, ?int $severity = null, string $keyword = '', ?int $assignedTo = null, ?string $createdFrom = null, ?string $createdTo = null, bool $useUpdatedTime = false, int $page = 1, int $pageSize = 20, bool $forExport = false): array
     {
         $baseSql = ' FROM feedback_tickets t LEFT JOIN admin_users u ON t.assigned_to = u.id WHERE 1=1';
         $params = [];
@@ -280,7 +281,9 @@ SQL;
         $page = max(1, (int)$page);
         $pageSize = max(1, (int)$pageSize);
         $offset = ($page - 1) * $pageSize;
-        $sql = 'SELECT t.ticket_no, t.type, t.severity, t.title, t.contact, t.status, t.admin_note, t.assigned_to, COALESCE(u.username, \'\') as assigned_username, t.attachment_name, t.created_at, t.updated_at' . $baseSql . ' ORDER BY t.created_at DESC LIMIT ' . $pageSize . ' OFFSET ' . $offset;
+        $detailFieldSql = $forExport ? ', t.details' : '';
+        $attachmentFieldSql = $forExport ? ', t.attachment_name, t.attachment_storage, t.attachment_mime, t.attachment_size' : '';
+        $sql = 'SELECT t.ticket_no, t.type, t.severity, t.title' . $detailFieldSql . ', t.contact, t.status, t.admin_note, t.assigned_to, COALESCE(u.username, \'\') as assigned_username' . $attachmentFieldSql . ', t.created_at, t.updated_at' . $baseSql . ' ORDER BY t.created_at DESC LIMIT ' . $pageSize . ' OFFSET ' . $offset;
 
         $stmt = $this->pdo->prepare($sql);
         foreach ($params as $key => $value) {

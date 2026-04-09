@@ -32,6 +32,7 @@ declare namespace API.Admin.Ticket {
       createdFrom?: string
       createdTo?: string
       useUpdatedTime?: boolean
+      forExport?: boolean
     }
 
     interface Detail {
@@ -81,7 +82,7 @@ interface TicketRecord {
   type: FeedbackType
   severity: Severity | null
   title: string
-  details: string
+  details?: string
   contact: string
   status: TicketStatus
   admin_note: string

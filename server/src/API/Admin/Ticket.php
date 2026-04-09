@@ -112,8 +112,9 @@ final class Ticket extends AdminSubModule
         }
         $page = $this->sanitizer->parseInt(Request::query('page', '1'), 1, 100000);
         $pageSize = $this->sanitizer->parseInt(Request::query('pageSize', '20'), 5, 500);
+        $forExport = $this->isTruthy(Request::query('forExport'));
 
-        $result = $this->createTicketRepository()->listTickets($status, $type, $severity, $keyword, $assignedTo, $createdFrom, $createdTo, $useUpdatedTime, $page, $pageSize);
+        $result = $this->createTicketRepository()->listTickets($status, $type, $severity, $keyword, $assignedTo, $createdFrom, $createdTo, $useUpdatedTime, $page, $pageSize, $forExport);
 
         Responder::send([
             'ok' => true,

@@ -174,18 +174,7 @@ async function loadTickets(nextPage = 1): Promise<void> {
   setTicketsLoading(true)
   try {
     setPage(nextPage)
-    const data = await api.admin.Ticket.get.list({
-      page: page.value,
-      pageSize: pageSize.value,
-      status: statusFilter.value ?? undefined,
-      type: typeFilter.value ?? undefined,
-      severity: severityFilter.value ?? undefined,
-      keyword: keyword.value.trim() || undefined,
-      assignedTo: assignedFilter.value ?? undefined,
-      createdFrom: createdFromFilter.value ?? undefined,
-      createdTo: createdToFilter.value ?? undefined,
-      useUpdatedTime: timeFilterMode.value === 'updated' ? true : undefined,
-    })
+    const data = await api.admin.Ticket.get.list(buildListQuery(page.value))
     applyTicketListResponse({
       tickets: data.tickets,
       total: data.pagination?.total || 0,
@@ -203,6 +192,22 @@ async function loadTickets(nextPage = 1): Promise<void> {
     }
   } finally {
     setTicketsLoading(false)
+  }
+}
+
+function buildListQuery(currentPage: number, forExport = false): API.Admin.Ticket.HttpParams.List {
+  return {
+    page: currentPage,
+    pageSize: pageSize.value,
+    status: statusFilter.value ?? undefined,
+    type: typeFilter.value ?? undefined,
+    severity: severityFilter.value ?? undefined,
+    keyword: keyword.value.trim() || undefined,
+    assignedTo: assignedFilter.value ?? undefined,
+    createdFrom: createdFromFilter.value ?? undefined,
+    createdTo: createdToFilter.value ?? undefined,
+    useUpdatedTime: timeFilterMode.value === 'updated' ? true : undefined,
+    forExport: forExport ? true : undefined,
   }
 }
 
@@ -445,7 +450,8 @@ async function handleExportCurrentPage(): Promise<void> {
   ]
 
   try {
-    const rows = await Promise.all(tickets.value.map(async (ticket) => {
+    const exportData = await api.admin.Ticket.get.list(buildListQuery(page.value, true))
+    const rows = await Promise.all(exportData.tickets.map(async (ticket) => {
       const attachmentUrl = ticket.attachment_name ? await getAdminTicketAttachmentDownloadUrl(ticket.ticket_no) : ''
       return [
         ticket.ticket_no,
