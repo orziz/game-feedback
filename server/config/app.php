@@ -9,7 +9,7 @@ return [
 
     // 应用版本号，由开发者维护，仅作展示用途
     // Application version number, maintained by developers for display purposes only
-    'app_version' => '0.1.1',
+    'app_version' => '0.1.5',
 
     // 服务端时区，影响日志与数据库时间戳的本地化输出
     // Server timezone; affects localized output of log and database timestamps
