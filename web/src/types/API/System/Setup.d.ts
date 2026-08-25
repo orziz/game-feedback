@@ -25,6 +25,8 @@ declare namespace API.System.Setup {
 
 /** 安装流程表单结构。 */
 interface InstallForm {
+  /** 服务端配置的一次性安装令牌。 */
+  installToken: string
   /** 数据库主机。 */
   host: string
   /** 数据库端口。 */

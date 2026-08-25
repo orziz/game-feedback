@@ -42,16 +42,14 @@ final class Auth extends AdminSubModule
         $rateLimiter = new RateLimiter();
         $rateLimitKey = 'admin-login|' . strtolower($username) . '|' . Request::clientIp();
 
-        $rateLimiter->ensureAllowed($rateLimitKey);
+        $rateLimiter->consume($rateLimitKey);
 
         if ($username === '' || $password === '') {
-            $rateLimiter->hit($rateLimitKey);
             Responder::error('INVALID_CREDENTIALS', '用户名或密码错误。', 401);
         }
 
         $user = $this->createUserRepository()->findByUsername($username);
         if (!$user || !password_verify($password, (string)$user['password_hash'])) {
-            $rateLimiter->hit($rateLimitKey);
             Responder::error('INVALID_CREDENTIALS', '用户名或密码错误。', 401);
         }
 

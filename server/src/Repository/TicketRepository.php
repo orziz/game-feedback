@@ -96,15 +96,17 @@ SQL;
      */
     public static function computeContentHash(int $type, string $title, string $details): string
     {
-        $normalizedTitle = mb_strtolower(
-            trim((string)(preg_replace('/\s+/u', ' ', $title) ?? '')),
-            'UTF-8'
-        );
-        $normalizedDetails = mb_strtolower(
-            trim((string)(preg_replace('/\s+/u', ' ', $details) ?? '')),
-            'UTF-8'
-        );
+        $normalizedTitle = self::normalizeHashText($title);
+        $normalizedDetails = self::normalizeHashText($details);
         return md5((string)$type . '|' . $normalizedTitle . '|' . $normalizedDetails);
+    }
+
+    private static function normalizeHashText(string $value): string
+    {
+        $normalized = trim((string)(preg_replace('/\s+/u', ' ', $value) ?? ''));
+        return function_exists('mb_strtolower')
+            ? mb_strtolower($normalized, 'UTF-8')
+            : strtolower($normalized);
     }
 
     /**

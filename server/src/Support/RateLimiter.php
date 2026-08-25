@@ -67,18 +67,54 @@ final class RateLimiter
     }
 
     /**
-     * 累计当前 key 的请求次数，超限后设置封禁
-     *
-     * @param string $key 限流标识
-     * @return void
+     * 在同一个排他锁内检查封禁状态并累计请求次数。
+     */
+    public function consume(string $key): void
+    {
+        $blockedUntil = $this->updateRecord($key, true);
+        if ($blockedUntil <= 0) {
+            return;
+        }
+
+        $now = time();
+        header('Retry-After: ' . (string)max(1, $blockedUntil - $now));
+        Responder::error('TOO_MANY_ATTEMPTS', '请求过于频繁，请稍后再试。', 429);
+    }
+
+    /**
+     * 累计当前 key 的请求次数，超限后设置封禁。
      */
     public function hit(string $key): void
     {
-        $now = time();
-        $record = $this->read($key);
-        $windowStartedAt = (int)($record['window_started_at'] ?? 0);
+        $this->updateRecord($key, false);
+    }
 
-        // 窗口已过期或首次请求，重置计数器
+    /**
+     * @return int 大于 0 时表示当前请求已处于封禁期，并返回封禁截止时间
+     */
+    private function updateRecord(string $key, bool $rejectIfBlocked): int
+    {
+        $this->ensureStorageDir();
+        $fp = @fopen($this->pathForKey($key), 'c+');
+        if ($fp === false) {
+            $this->storageFailure();
+        }
+
+        if (!flock($fp, LOCK_EX)) {
+            fclose($fp);
+            $this->storageFailure();
+        }
+
+        $record = $this->decodeRecord((string)stream_get_contents($fp), true);
+        $now = time();
+        $blockedUntil = (int)($record['blocked_until'] ?? 0);
+        if ($rejectIfBlocked && $blockedUntil > $now) {
+            flock($fp, LOCK_UN);
+            fclose($fp);
+            return $blockedUntil;
+        }
+
+        $windowStartedAt = (int)($record['window_started_at'] ?? 0);
         if ($windowStartedAt <= 0 || ($now - $windowStartedAt) > $this->windowSeconds) {
             $record = [
                 'attempts' => 0,
@@ -89,11 +125,24 @@ final class RateLimiter
 
         $record['attempts'] = (int)($record['attempts'] ?? 0) + 1;
         if ((int)$record['attempts'] >= $this->maxAttempts) {
-            // 已达上限，设置封禁截止时间
             $record['blocked_until'] = $now + $this->blockSeconds;
         }
 
-        $this->write($key, $record);
+        $encoded = json_encode($record);
+        $writeSucceeded = is_string($encoded)
+            && rewind($fp)
+            && fwrite($fp, $encoded) === strlen($encoded)
+            && ftruncate($fp, strlen($encoded))
+            && fflush($fp);
+
+        flock($fp, LOCK_UN);
+        fclose($fp);
+
+        if (!$writeSucceeded) {
+            $this->storageFailure();
+        }
+
+        return 0;
     }
 
     /**
@@ -105,16 +154,12 @@ final class RateLimiter
     public function clear(string $key): void
     {
         $path = $this->pathForKey($key);
-        if (is_file($path)) {
-            @unlink($path);
+        if (is_file($path) && !@unlink($path)) {
+            $this->storageFailure();
         }
     }
 
     /**
-     * 读取指定 key 的限流记录
-     *
-     * 使用共享锁（LOCK_SH）读取，与 write() 的排他锁配合，防止并发写入导致数据撕裂。
-     *
      * @return array<string, int>
      */
     private function read(string $key): array
@@ -124,37 +169,47 @@ final class RateLimiter
             return [];
         }
 
-        // 使用共享锁读取，与 write() 的排他锁配合，避免并发脏读
         $fp = @fopen($path, 'r');
         if ($fp === false) {
-            return [];
+            $this->storageFailure();
         }
 
-        $raw = '';
-        if (flock($fp, LOCK_SH)) {
-            $raw = (string)stream_get_contents($fp);
-            flock($fp, LOCK_UN);
+        if (!flock($fp, LOCK_SH)) {
+            fclose($fp);
+            $this->storageFailure();
         }
+
+        $raw = (string)stream_get_contents($fp);
+        flock($fp, LOCK_UN);
         fclose($fp);
 
-        if ($raw === '') {
-            return [];
-        }
-
-        $decoded = json_decode($raw, true);
-        return is_array($decoded) ? $decoded : [];
+        return $this->decodeRecord($raw);
     }
 
     /**
-     * 以排他锁写入限流记录
-     *
-     * @param array<string, int> $record 限流数据
-     * @return void
+     * @return array<string, int>
      */
-    private function write(string $key, array $record): void
+    private function decodeRecord(string $raw, bool $allowEmpty = false): array
     {
-        $this->ensureStorageDir();
-        @file_put_contents($this->pathForKey($key), json_encode($record), LOCK_EX);
+        if ($raw === '') {
+            if ($allowEmpty) {
+                return [];
+            }
+
+            $this->storageFailure();
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            $this->storageFailure();
+        }
+
+        return $decoded;
+    }
+
+    private function storageFailure(): void
+    {
+        Responder::error('RATE_LIMIT_STORAGE_FAILED', '无法安全读写限流状态，请稍后再试。', 500);
     }
 
     /**

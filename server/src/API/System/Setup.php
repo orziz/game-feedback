@@ -13,7 +13,11 @@ use GameFeedback\Support\SystemInstaller;
 final class Setup extends BaseApiSubModule
 {
     /**
-     * @return array<string, array{methods: array<int, string>, allow_before_install?: bool}>
+     * @return array<string, array{
+     *   methods: array<int, string>,
+     *   allow_before_install?: bool,
+     *   rate_limit?: array<string, int|string>
+     * }>
      */
     protected function actionMeta(): array
     {
@@ -25,6 +29,7 @@ final class Setup extends BaseApiSubModule
             'install' => [
                 self::META_METHODS => ['POST'],
                 self::META_ALLOW_BEFORE_INSTALL => true,
+                self::META_RATE_LIMIT => $this->rateLimitMeta('system-install', 10, 600, 600),
             ],
         ];
     }
@@ -55,6 +60,42 @@ final class Setup extends BaseApiSubModule
         }
 
         $payload = Request::jsonBody();
+        $this->ensureInstallAuthorized($payload);
         (new SystemInstaller($this->databaseConfigPath, $this->sanitizer))->install($payload);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function ensureInstallAuthorized(array $payload): void
+    {
+        $configuredToken = trim((string)(getenv('APP_INSTALL_TOKEN') ?: ''));
+        if ($configuredToken === '') {
+            if (in_array(Request::clientIp(), ['127.0.0.1', '::1'], true)) {
+                return;
+            }
+
+            Responder::error(
+                'INSTALL_TOKEN_NOT_CONFIGURED',
+                '远程安装前必须先在服务端配置 APP_INSTALL_TOKEN。',
+                503
+            );
+        }
+
+        if (strlen($configuredToken) < 16) {
+            Responder::error(
+                'INSTALL_TOKEN_TOO_SHORT',
+                '服务端 APP_INSTALL_TOKEN 长度不能少于 16 位。',
+                503
+            );
+        }
+
+        $providedToken = $this->sanitizer->sanitizeSingleLine(
+            (string)($payload['installToken'] ?? ''),
+            255
+        );
+        if ($providedToken === '' || !hash_equals($configuredToken, $providedToken)) {
+            Responder::error('INVALID_INSTALL_TOKEN', '首次安装令牌无效。', 403);
+        }
     }
 }

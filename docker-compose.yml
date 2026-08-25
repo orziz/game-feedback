@@ -28,6 +28,7 @@ services:
     restart: unless-stopped
     environment:
       GAME_FEEDBACK_DATABASE_CONFIG: /var/www/app/runtime/database.php
+      APP_INSTALL_TOKEN: ${APP_INSTALL_TOKEN:-}
       PHP_POST_MAX_SIZE: ${PHP_POST_MAX_SIZE:-20M}
       PHP_UPLOAD_MAX_FILESIZE: ${PHP_UPLOAD_MAX_FILESIZE:-20M}
       PHP_MAX_FILE_UPLOADS: ${PHP_MAX_FILE_UPLOADS:-20}

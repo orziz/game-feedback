@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, ref } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import { useMessage, useDialog } from 'naive-ui'
@@ -12,7 +12,7 @@ const message = useMessage()
 const dialog = useDialog()
 const submitting = ref(false)
 const appStore = useAppStore()
-const { typeOptions, severityOptions, uploadMode, uploadMaxBytes } = storeToRefs(appStore)
+const { activeTab, typeOptions, severityOptions, uploadMode, uploadMaxBytes } = storeToRefs(appStore)
 const defaultType: FeedbackType = 0
 const defaultSeverity: Severity = 1
 const canUploadAttachment = computed(() => uploadMode.value !== 'off')
@@ -43,16 +43,14 @@ const form = ref<SubmitForm>({
   attachmentFile: null,
 })
 
-function applyAttachmentFile(file: File | null): void {
+function applyAttachmentFile(file: File | null): boolean {
   if (!file) {
-    form.value.attachmentFile = null
-    return
+    return false
   }
 
   if (!canUploadAttachment.value) {
     message.warning(t('messages.uploadDisabled'))
-    form.value.attachmentFile = null
-    return
+    return false
   }
 
   const fileName = file.name.toLowerCase()
@@ -63,24 +61,25 @@ function applyAttachmentFile(file: File | null): void {
     || fileName.endsWith('.jpeg')
   if (!validExtension) {
     message.warning(t('messages.uploadTypeInvalid'))
-    form.value.attachmentFile = null
-    return
+    return false
   }
 
   if (file.size > maxAttachmentSize.value) {
     message.warning(t('messages.uploadSizeInvalid', { size: maxAttachmentSizeMb.value }))
-    form.value.attachmentFile = null
-    return
+    return false
   }
 
   form.value.attachmentFile = file
+  if (attachmentInputRef.value) {
+    attachmentInputRef.value.value = ''
+  }
+  return true
 }
 
 function handleAttachmentChange(event: Event): void {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0] ?? null
-  applyAttachmentFile(file)
-  if (!form.value.attachmentFile) {
+  if (!applyAttachmentFile(file)) {
     target.value = ''
   }
 }
@@ -88,6 +87,9 @@ function handleAttachmentChange(event: Event): void {
 function handleAttachmentDragOver(event: DragEvent): void {
   event.preventDefault()
   if (!canUploadAttachment.value || submitting.value) return
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'copy'
+  }
   attachmentDragging.value = true
 }
 
@@ -106,6 +108,51 @@ function handleAttachmentDrop(event: DragEvent): void {
   const file = event.dataTransfer?.files?.[0] ?? null
   applyAttachmentFile(file)
 }
+
+function buildScreenshotFile(sourceFile: File): File {
+  const now = new Date()
+  const timestamp = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+    '-',
+    String(now.getHours()).padStart(2, '0'),
+    String(now.getMinutes()).padStart(2, '0'),
+    String(now.getSeconds()).padStart(2, '0'),
+  ].join('')
+  const extension = sourceFile.type === 'image/png' ? 'png' : 'jpg'
+
+  return new File([sourceFile], `screenshot-${timestamp}.${extension}`, {
+    type: sourceFile.type,
+    lastModified: now.getTime(),
+  })
+}
+
+function handleAttachmentPaste(event: ClipboardEvent): void {
+  if (event.defaultPrevented
+    || activeTab.value !== 'submit'
+    || !canUploadAttachment.value
+    || submitting.value) {
+    return
+  }
+
+  const imageItem = Array.from(event.clipboardData?.items ?? []).find(item => (
+    item.kind === 'file'
+      && ['image/png', 'image/jpeg', 'image/jpg'].includes(item.type.toLowerCase())
+  ))
+  const sourceFile = imageItem?.getAsFile() ?? null
+  if (!sourceFile) {
+    return
+  }
+
+  event.preventDefault()
+  if (applyAttachmentFile(buildScreenshotFile(sourceFile))) {
+    message.success(t('messages.screenshotPasted'))
+  }
+}
+
+onMounted(() => window.addEventListener('paste', handleAttachmentPaste))
+onBeforeUnmount(() => window.removeEventListener('paste', handleAttachmentPaste))
 
 function clearAttachment(): void {
   form.value.attachmentFile = null
@@ -288,7 +335,7 @@ async function handleSubmit(): Promise<void> {
         class="submit-attachment"
         :class="{ 'is-dragging': attachmentDragging, 'has-file': !!form.attachmentFile }"
         @dragover="handleAttachmentDragOver"
-        @dragenter.prevent="attachmentDragging = true"
+        @dragenter="handleAttachmentDragOver"
         @dragleave="handleAttachmentDragLeave"
         @drop="handleAttachmentDrop"
       >
@@ -424,6 +471,11 @@ async function handleSubmit(): Promise<void> {
 
 .submit-attachment.is-dragging {
   box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.16);
+}
+
+.submit-attachment.is-dragging .submit-attachment__row {
+  border-color: rgba(13, 148, 136, 0.72);
+  background: rgba(236, 253, 245, 0.98);
 }
 
 .submit-attachment__native {

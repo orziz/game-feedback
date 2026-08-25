@@ -1,1 +1,3 @@
 config/database.php
+config/database.php.lock
+config/.database.php.*

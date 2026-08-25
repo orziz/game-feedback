@@ -39,8 +39,11 @@
 如果你想把前后端和 MySQL 一起跑起来，可以直接用 Docker Compose：
 
 ```bash
-# 可选：先复制默认环境变量配置
+# 首次部署先创建环境配置并生成安装令牌
 cp .env.example .env
+INSTALL_TOKEN="$(openssl rand -hex 32)"
+sed -i.bak "s/^APP_INSTALL_TOKEN=.*/APP_INSTALL_TOKEN=${INSTALL_TOKEN}/" .env
+rm -f .env.bak
 
 # 启动（支持自定义 .env 文件覆盖默认环境变量）
 docker compose up -d --build
@@ -57,6 +60,7 @@ docker compose up -d --build
 可配置项：
 
 - `APP_PORT`：本机映射端口，默认 `8001`
+- `APP_INSTALL_TOKEN`：首次安装令牌；Docker 或远程安装必须设置，建议使用至少 16 位随机值
 - `MYSQL_DATABASE`：默认 `game_feedback`
 - `MYSQL_USER`：默认 `game_feedback`
 - `MYSQL_PASSWORD`：默认 `game_feedback`
@@ -94,6 +98,10 @@ docker compose up -d --build
 
 第一次启动时，打开首页会进入安装向导。
 
+启动前必须在 `.env` 中设置首次安装令牌。若没有执行上面的快速启动命令，可以运行 `openssl rand -hex 32`，再将输出填入 `.env` 的 `APP_INSTALL_TOKEN`。
+
+打开安装向导后，将 `.env` 中的 `APP_INSTALL_TOKEN` 填入“首次安装令牌”。令牌仅用于首次初始化，不会写入数据库配置文件。直接在本机通过 `127.0.0.1` 或 `::1` 运行 PHP 开发服务器时可以留空。
+
 数据库连接请填写 Compose 内置的 MySQL 服务信息：
 
 - Host：优先使用 `.env` 里的 `APP_DB_HOST`；未设置时填写 `mysql`
@@ -125,7 +133,7 @@ docker compose down -v
 ### 准备工作
 
 1. **环境要求**：
-   - Node.js 18+
+   - Node.js 20.19+ 或 22.12+
    - PHP 7.2+
    - MySQL 5.6+
 

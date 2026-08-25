@@ -3,6 +3,8 @@
 storage
 server/storage/
 server/config/database.php
+server/config/database.php.lock
+server/config/.database.php.*
 
 .agents
 skills-lock.json

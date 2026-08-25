@@ -158,6 +158,22 @@ final class AttachmentCleanupService
     }
 
     /**
+     * 删除一次尚未写入工单记录的上传，用于提交失败后的补偿清理。
+     *
+     * @param array<string, mixed> $attachment
+     */
+    public function discardUploadedAttachment(array $attachment): void
+    {
+        $storage = trim((string)($attachment['storage'] ?? ''));
+        $key = trim((string)($attachment['key'] ?? ''));
+        if ($storage === '' || $key === '') {
+            return;
+        }
+
+        $this->deleteAttachment($storage, $key);
+    }
+
+    /**
      * 按存储类型删除附件，并返回删除结果。
      */
     private function deleteAttachment(string $storage, string $key): string

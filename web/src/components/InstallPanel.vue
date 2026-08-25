@@ -10,6 +10,7 @@ const { installSystem } = appStore
 const { installLoading } = storeToRefs(appStore)
 
 const form = ref<InstallForm>({
+  installToken:  '',
   host:          '127.0.0.1',
   port:          3306,
   database:      '',
@@ -31,6 +32,14 @@ const form = ref<InstallForm>({
     <p class="panel-tip">{{ t('install.tip') }}</p>
 
     <n-form label-placement="left" label-width="144" class="install-form">
+      <n-form-item :label="t('install.installToken')">
+        <n-input
+          v-model:value="form.installToken"
+          type="password"
+          show-password-on="click"
+          :placeholder="t('install.installTokenPlaceholder')"
+        />
+      </n-form-item>
       <n-form-item :label="t('install.dbHost')">
         <n-input v-model:value="form.host" placeholder="127.0.0.1" />
       </n-form-item>

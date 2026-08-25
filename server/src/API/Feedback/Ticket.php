@@ -8,9 +8,11 @@ use GameFeedback\API\BaseApiSubModule;
 use GameFeedback\Enums\TicketSeverity;
 use GameFeedback\Enums\TicketStatus;
 use GameFeedback\Enums\TicketType;
+use GameFeedback\Support\AttachmentCleanupService;
 use GameFeedback\Support\AttachmentUploader;
 use GameFeedback\Support\Request;
 use GameFeedback\Support\Responder;
+use Throwable;
 
 final class Ticket extends BaseApiSubModule
 {
@@ -76,8 +78,6 @@ final class Ticket extends BaseApiSubModule
             Responder::error('MISSING_REQUIRED_FIELDS', '反馈类型、严重程度、标题、详细介绍均为必填。', 422);
         }
 
-        $attachmentMeta = (new AttachmentUploader($this->dbConfig))->handleUpload(Request::uploadedFile('attachment'));
-
         $repo = $this->createTicketRepository();
         $existingTicketNo = $repo->findDuplicateTicketNo($type, $title, $description);
 
@@ -92,24 +92,37 @@ final class Ticket extends BaseApiSubModule
 
         $ticketNo = $repo->generateTicketNo();
         $now = date('Y-m-d H:i:s');
+        $attachmentMeta = (new AttachmentUploader($this->dbConfig))->handleUpload(Request::uploadedFile('attachment'));
 
-        $repo->insertTicket([
-            ':ticket_no' => $ticketNo,
-            ':type' => $type,
-            ':severity' => $severity,
-            ':title' => $title,
-            ':details' => $description,
-            ':contact' => $contact,
-            ':attachment_name' => $attachmentMeta['name'],
-            ':attachment_storage' => $attachmentMeta['storage'],
-            ':attachment_key' => $attachmentMeta['key'],
-            ':attachment_mime' => $attachmentMeta['mime'],
-            ':attachment_size' => $attachmentMeta['size'],
-            ':status' => TicketStatus::Pending,
-            ':admin_note' => null,
-            ':created_at' => $now,
-            ':updated_at' => $now,
-        ]);
+        try {
+            $repo->insertTicket([
+                ':ticket_no' => $ticketNo,
+                ':type' => $type,
+                ':severity' => $severity,
+                ':title' => $title,
+                ':details' => $description,
+                ':contact' => $contact,
+                ':attachment_name' => $attachmentMeta['name'],
+                ':attachment_storage' => $attachmentMeta['storage'],
+                ':attachment_key' => $attachmentMeta['key'],
+                ':attachment_mime' => $attachmentMeta['mime'],
+                ':attachment_size' => $attachmentMeta['size'],
+                ':status' => TicketStatus::Pending,
+                ':admin_note' => null,
+                ':created_at' => $now,
+                ':updated_at' => $now,
+            ]);
+        } catch (Throwable $e) {
+            try {
+                (new AttachmentCleanupService($this->dbConfig, $this->getPdo()))
+                    ->discardUploadedAttachment($attachmentMeta);
+            } catch (Throwable $cleanupError) {
+                error_log('[Ticket] Attachment rollback failed: ' . $cleanupError->getMessage());
+            }
+
+            error_log('[Ticket] Ticket creation failed: ' . $e->getMessage());
+            Responder::error('TICKET_CREATE_FAILED', '提交失败，请稍后重试。', 500);
+        }
 
         Responder::send([
             'ok' => true,

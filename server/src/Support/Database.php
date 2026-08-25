@@ -130,14 +130,51 @@ final class Database
     public static function writeConfig(string $path, array $databaseConfig): void
     {
         $content = self::buildConfigContent($databaseConfig);
-        $result = @file_put_contents($path, $content);
-        if ($result === false) {
-            Responder::send([
-                'ok' => false,
-                'code' => 'CONFIG_WRITE_FAILED',
-                'message' => '无法写入配置文件，请检查目录权限：' . $path,
-            ], 500);
+        $directory = dirname($path);
+        if (!is_dir($directory) || !is_writable($directory)) {
+            self::configWriteFailure();
         }
+
+        $lockPath = $path . '.lock';
+        $lockHandle = @fopen($lockPath, 'c');
+        if ($lockHandle === false) {
+            self::configWriteFailure();
+        }
+        @chmod($lockPath, 0600);
+
+        if (!flock($lockHandle, LOCK_EX)) {
+            fclose($lockHandle);
+            self::configWriteFailure();
+        }
+
+        $tempPath = @tempnam($directory, '.database.php.');
+        $writeSucceeded = false;
+        if ($tempPath !== false) {
+            $writtenBytes = @file_put_contents($tempPath, $content, LOCK_EX);
+            $permissionsSecured = DIRECTORY_SEPARATOR === '\\' || @chmod($tempPath, 0600);
+            $writeSucceeded = $writtenBytes === strlen($content)
+                && $permissionsSecured
+                && @rename($tempPath, $path);
+        }
+
+        if ($tempPath !== false && is_file($tempPath)) {
+            @unlink($tempPath);
+        }
+        flock($lockHandle, LOCK_UN);
+        fclose($lockHandle);
+
+        if (!$writeSucceeded) {
+            self::configWriteFailure();
+        }
+    }
+
+    private static function configWriteFailure(): void
+    {
+        Responder::error(
+            'CONFIG_WRITE_FAILED',
+            '无法安全写入配置文件，请检查配置目录权限。',
+            500
+        );
     }
 
     /**

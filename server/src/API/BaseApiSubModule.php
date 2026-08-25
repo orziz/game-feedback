@@ -267,8 +267,7 @@ abstract class BaseApiSubModule
 
         $limiter = new RateLimiter(null, $maxAttempts, max(1, $windowSeconds), max(1, $blockSeconds));
         $key = $scope . '|' . Request::clientIp();
-        $limiter->ensureAllowed($key);
-        $limiter->hit($key);
+        $limiter->consume($key);
     }
 
     /**

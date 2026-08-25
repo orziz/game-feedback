@@ -1,8 +1,8 @@
 FROM php:8.2-fpm-bookworm
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libcurl4-openssl-dev gettext-base \
-    && docker-php-ext-install pdo_mysql \
+    && apt-get install -y --no-install-recommends libcurl4-openssl-dev libonig-dev gettext-base \
+    && docker-php-ext-install pdo_mysql mbstring \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /var/www/app

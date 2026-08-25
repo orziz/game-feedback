@@ -96,6 +96,7 @@ export const useAppStore = defineStore('app', () => {
     installLoading.value = true
     try {
       await api.system.Setup.post.install({
+        installToken: payload.installToken.trim(),
         host: payload.host.trim(),
         port: Number(payload.port),
         database: payload.database.trim(),
